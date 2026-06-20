@@ -51,13 +51,28 @@ export default function ProjectLibrary() {
 
   useEffect(() => {
     let cancelled = false
+
+    // 🚀 秒开优化：先从 localStorage 读取缓存，立刻显示
+    try {
+      const cached = localStorage.getItem('wisescan_cache_projects')
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setProjects(parsed)
+          setLoading(false) // 有缓存就不显示 loading 转圈
+        }
+      }
+    } catch {}
+
     async function fetchProjects() {
-      setLoading(true)
+      if (!cancelled && projects.length === 0) {
+        setLoading(true) // 只在没缓存时显示 loading
+      }
       setFetchError(null)
       console.time('⏱️ fetchProjects 总耗时')
       try {
         console.time('⏱️ supabase 并行查询')
-        // 并行查询：项目列表 + 风险报告
+        // 并行查询：项目列表 + 风险报告（加上 limit 防止全量扫表）
         const [projResult, reportResult] = await Promise.all([
           supabase
             .from('projects')
@@ -67,7 +82,8 @@ export default function ProjectLibrary() {
           supabase
             .from('risk_reports')
             .select('project_id, total_score')
-            .order('created_at', { ascending: false }),
+            .order('created_at', { ascending: false })
+            .limit(500),
         ])
         console.timeEnd('⏱️ supabase 并行查询')
 
@@ -98,7 +114,7 @@ export default function ProjectLibrary() {
               }
             }
           } catch {}
-          setProjects((projResult.data || []).map(row => {
+          const freshProjects = (projResult.data || []).map(row => {
             const rec = mapDbRow(row)
             if (riskMap[rec.id]) rec.riskLevel = riskMap[rec.id]
             if (rec.contractAddress) {
@@ -106,7 +122,10 @@ export default function ProjectLibrary() {
               if (localC && localC > rec.assessmentCount) rec.assessmentCount = localC
             }
             return rec
-          }))
+          })
+          setProjects(freshProjects)
+          // 💾 写入缓存，下次秒开
+          try { localStorage.setItem('wisescan_cache_projects', JSON.stringify(freshProjects)) } catch {}
         }
       } catch (e: any) {
         if (cancelled) return
