@@ -1,12 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react"
-import { createPortal } from "react-dom"
 import { useNavigate, useLocation } from "react-router-dom"
 import RadarChart from "../components/RadarChart"
 import ScanMethodologyModal from "../components/ScanMethodologyModal"
 import ErrorBoundary from "../components/ErrorBoundary"
 import ProjectInfoCard from "../components/ProjectInfoCard"
 import { useAccount } from "wagmi"
-import { upsertProject, getProjectByAddress } from "../services/projectService"
+import { upsertProject } from "../services/projectService"
 import { generateComprehensiveReview } from "../utils/reviewGenerator"
 import { normalizeReportData } from "../utils/normalizeReport"
 import { copyToClipboard } from "../utils/clipboard"
@@ -15,7 +14,7 @@ import { TencentAsrClient } from "../services/tencentAsr"
 import ShareButton from "../components/ShareButton"
 import {
   ChevronLeft, MessageCirclePlus, Mic, Keyboard, Send,
-  AlertCircle, X, Copy, Check, Info, Gift, ChevronRight
+  AlertCircle
 } from "lucide-react"
 
 interface Message {
@@ -46,75 +45,6 @@ const initialWelcomeMessage = `👋 你是不是也遇到过——
 第一步完全免费：我会给你一份"快速扫描"，告诉你合约有没有问题、持币是不是集中、信息披露了多少。
 
 如果你想看更深度的全景风险报告（包括六维诊断图、全网舆情、AI综合安全解读），只需要 2.99 USDT —— 相当于少吃一顿快餐，但可能帮你避开一个几万块的坑。`
-
-interface MethodologySection {
-  title: string
-  content: string[]
-  emoji?: string
-}
-
-interface DimensionRow {
-  dimension: string
-  weight: string
-  points: string
-}
-
-interface RiskLevelRow {
-  score: string
-  level: string
-  conclusion: string
-}
-
-const dataSources = [
-  { name: "BscScan / Etherscan", desc: "获取合约地址、持币分布、流动性锁定、交易记录" },
-  { name: "GoPlus Security", desc: "检测合约漏洞、蜜罐风险、授权异常" },
-  { name: "RugCheck", desc: "识别 Rug Pull 风险、代币经济模型基础问题" },
-  { name: "RootData", desc: "查询投资机构、团队背景、代币解锁信息" },
-  { name: "CoinGecko", desc: "获取代币价格、市值、交易量、流动性池、官网及社媒链接" },
-  { name: "Dune Analytics", desc: "自定义追踪用户行为、跨链活动、鲸鱼钱包动向" },
-  { name: "Messari", desc: "参考项目研究报告、市场情绪指标、行业新闻" },
-  { name: "Coinhawk", desc: "聚合链上+链下数据输出风险评分参考" },
-  { name: "Twitter/Telegram/百度/微博", desc: "舆情关键词与情感分析" },
-  { name: "用户贡献", desc: "经三重交叉验证的截图与聊天记录" },
-]
-
-const dimensionTable: DimensionRow[] = [
-  { dimension: "代码与技术安全", weight: "25%", points: "合约审计、漏洞检测、权限控制、历史变更" },
-  { dimension: "团队与运营透明度", weight: "20%", points: "团队实名、融资披露、信息完整性" },
-  { dimension: "经济模型与资金安全", weight: "20%", points: "代币分配、LP锁仓、资金外流" },
-  { dimension: "社群与市场热度", weight: "15%", points: "社群真实性、舆情分析、开发活跃度" },
-  { dimension: "历史与执行可靠性", weight: "10%", points: "模式变更次数、出金异常" },
-  { dimension: "合规性与法律风险", weight: "10%", points: "法律实体、牌照、KYC/AML" },
-]
-
-const riskLevelTable: RiskLevelRow[] = [
-  { score: "90-100", level: "极低风险", conclusion: "可以参与" },
-  { score: "75-89", level: "低风险", conclusion: "可以参与" },
-  { score: "60-74", level: "中等风险", conclusion: "谨慎参与" },
-  { score: "40-59", level: "高风险", conclusion: "不建议参与" },
-  { score: "0-39", level: "极高风险", conclusion: "严禁参与" },
-]
-
-const methodologyData: MethodologySection[] = [
-  {
-    title: "动态更新机制",
-    emoji: "🔄",
-    content: [
-      "报告基于评估时的公开数据生成，项目状态可能变化",
-      "用户可支付 1 USDT 刷新报告，获取最新分析",
-      "历史报告保存在\"我的\"页面，支持对比查看",
-    ]
-  },
-  {
-    title: "免责声明",
-    emoji: "⚖️",
-    content: [
-      "本工具所有报告均基于公开API、链上数据及用户贡献信息自动生成。",
-      "明鉴不对信息的绝对准确性、完整性或时效性作任何保证。",
-      "用户应自行核实并承担投资风险。平台不提供任何投资建议。",
-    ]
-  }
-]
 
 // ===== ReportData 接口（DeepSeek API 返回结构）=====
 interface ReportData {
@@ -153,25 +83,19 @@ function RiskReportCard({
   projectName,
   contractAddress = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
   onCopyAddress,
-  copied,
   onAnalyzeBusinessModel,
   reportData,
   assessmentCount = 0,
   lastEvaluation = '--',
-  linkedToken = '',
 }: {
   projectName: string
   contractAddress?: string
   onCopyAddress?: () => void
-  copied?: boolean
   onAnalyzeBusinessModel?: () => void
   reportData?: ReportData
   assessmentCount?: number
   lastEvaluation?: string
-  linkedToken?: string
 }) {
-  const [isTokenExpanded, setIsTokenExpanded] = useState(false)
-  const [showInfoPopover, setShowInfoPopover] = useState(false)
 
   // 🔧 维度满分映射（DeepSeek 可能不返回 max 字段）
   const dimensionMaxMap: Record<string, number> = {
@@ -216,9 +140,6 @@ function RiskReportCard({
   const publicOpinionSummary = typeof publicOpinionRaw === 'string' 
     ? publicOpinionRaw 
     : (publicOpinionRaw?.summary || '')
-  const negativeKeywords = typeof publicOpinionRaw === 'object' && publicOpinionRaw?.negative_keywords 
-    ? publicOpinionRaw.negative_keywords 
-    : []
   
   // 🔧 v5.13: 优先使用 DeepSeek AI 生成的综合解读，模板拼凑仅作 fallback
   const aiSummary = (reportData?.ai_summary && typeof reportData.ai_summary === 'string' && reportData.ai_summary.trim().length > 20)
@@ -245,37 +166,6 @@ function RiskReportCard({
   const onChain = reportData?.onChainData
   const hasOnChain = !!onChain?.tokenName && onChain.tokenName !== '未知'
   const onChainToken = hasOnChain ? onChain!.tokenSymbol : undefined
-
-  // 信息完整性评分：基于数据可用性计算（满分 100，但未联网数据不能超过 60）
-  const integrityScore = (() => {
-    let s = 10
-    if (projectName && projectName !== '未命名项目') s += 5
-    if (contractAddress && contractAddress !== '0x742d35Cc6634C0532925a3b844Bc454e4438f44e') s += 5
-    if (hasOnChain) s += 20  // 有链上数据 +20
-    if (reportData?.total_score !== undefined && reportData.total_score > 0) s += 20
-    if (reportData?.public_opinion) s += 10
-    if (reportData?.ai_summary) s += 10
-    // 无链上数据时封顶 75（防止纯 AI 生成数据给满分）
-    return hasOnChain ? Math.min(s, 95) : Math.min(s, 75)
-  })()
-  const integrityLabel = integrityScore >= 70 ? '较高' : integrityScore >= 45 ? '中等' : '较低'
-
-  // 🔍 定性字段：来自 GoPlus API + DeepSeek
-  const lockStatus = onChain?.goplus?.lpLockStatus || reportData?.liquidity_lock || null
-  const top10Concentration = onChain?.goplus?.top10Percent !== null && onChain?.goplus?.top10Percent !== undefined
-    ? (onChain.goplus.top10Percent >= 70 ? '极高' : onChain.goplus.top10Percent >= 50 ? '偏高' : '正常')
-    : reportData?.top10_concentration || null
-  const hasFunding = reportData?.funding_record || null
-  const _lockRender = lockStatus === '已锁定' ? { icon: '🔒', text: '已锁定', color: 'text-green-400' }
-    : lockStatus === '未锁定' ? { icon: '🔓', text: '未锁定', color: 'text-red-400' }
-    : null
-  const _top10Render = top10Concentration === '极高' ? { icon: '🔴', text: '极高集中度', color: 'text-red-400' }
-    : top10Concentration === '偏高' ? { icon: '🟡', text: '偏高', color: 'text-yellow-400' }
-    : top10Concentration === '正常' ? { icon: '🟢', text: '正常', color: 'text-green-400' }
-    : null
-  const _fundingRender = hasFunding === '有' ? { icon: '💰', text: '有融资', color: 'text-green-400' }
-    : hasFunding === '无' ? { icon: '❌', text: '无融资', color: 'text-[#6B7280]' }
-    : null
 
   return (
     <div className="w-full bg-zinc-900 rounded-lg border border-[#343438]">  {/* 报告标题 */}
@@ -389,12 +279,6 @@ function RiskReportCard({
         <div className="border-t border-[#343438] -mx-4"></div>
 
         <ShareButton
-          data={{
-            projectName,
-            contractAddress,
-            riskLabel: riskLevel,
-            summary: conclusion,
-          }}
           label="分享项目情报"
           className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-xs font-medium py-2.5 rounded-full transition-colors"
         />
@@ -468,7 +352,7 @@ export default function RiskAssessment() {
   const [asrError, setAsrError] = useState<string | null>(null)
   const asrClientRef = useRef<TencentAsrClient | null>(null)  // 阶段六：腾讯云 ASR 客户端
   const [showMethodologyModal, setShowMethodologyModal] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [, setCopied] = useState(false)
   const [showNewConversationModal, setShowNewConversationModal] = useState(false)
   const [showBackConfirmModal, setShowBackConfirmModal] = useState(false)
   const [showAnalyzeModal, setShowAnalyzeModal] = useState(false)
@@ -483,8 +367,8 @@ export default function RiskAssessment() {
   // 对话权限状态（阶段五：免费 vs 付费）
   const [chatIsPaid, setChatIsPaid] = useState(false)
   const [conversationCount, setConversationCount] = useState(0)
-  const [_remainingCount, _setRemainingCount] = useState(5)
-  const [_reportData, _setReportData] = useState<ReportData | null>(null)
+  const [, setRemainingCount] = useState(5)
+  const [, setReportData] = useState<ReportData | null>(null)
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const [formData, setFormData] = useState({
     projectName: "",
@@ -632,11 +516,6 @@ export default function RiskAssessment() {
       setTimeout(() => setCopied(false), 2000)
     }
   }, [formData.contractAddress])
-
-  const _handleEvidenceChange = (images: File[], text: string) => {
-    setEvidenceImages(images)
-    setEvidenceText(text)
-  }
 
   const handleSendMessage = async (voiceText?: string) => {
     const messageText = voiceText?.trim() || inputValue.trim()
@@ -991,26 +870,6 @@ export default function RiskAssessment() {
     e.target.value = ""
   }
 
-  // ========== 合约地址格式校验 ==========
-  // EIP-55 校验和验证（捕获 ~50% 的手动输入错误）
-  const _isValidEIP55 = (addr: string): boolean => {
-    // 简单实现：检查地址是否符合 EIP-55 大小写规则
-    // 完整实现需要 keccak256 哈希，这里用简化版：检查是否有大小写混合
-    const lower = addr.toLowerCase()
-    const upper = addr.toUpperCase()
-    // 如果地址是全小写或全大写，无法通过 EIP-55 校验
-    // 如果是大小写混合，可能是 EIP-55 校验和正确的地址
-    return addr !== lower && addr !== upper
-  }
-
-  const _isValidContractAddress = (addr: string): boolean => {
-    const trimmed = addr.trim()
-    const formatOk = /^0x[0-9a-fA-F]{40}$/.test(trimmed)
-    if (!formatOk) return false
-    // 如果地址是全小写或全大写，给出警告但不阻止（用户可能复制的没有校验和）
-    return true
-  }
-
   // 合约地址验证状态
   const [contractValidation, setContractValidation] = useState<{
     status: 'unchecked' | 'format_invalid' | 'eip55_ok' | 'eip55_fail' | 'onchain_verifying' | 'onchain_verified' | 'onchain_fail'
@@ -1155,8 +1014,8 @@ export default function RiskAssessment() {
             }
           }
         }
-      } catch (err) {
-        console.warn('⚠️  项目名称标准化失败，使用原始名称:', err.message)
+      } catch (err: unknown) {
+        console.warn('⚠️  项目名称标准化失败，使用原始名称:', (err as Error)?.message || err)
         // 降级：使用原始名称
       }
     }
@@ -1660,12 +1519,10 @@ export default function RiskAssessment() {
                     projectName={message.cardProjectName || "未命名项目"}
                     contractAddress={message.cardContractAddress || formData.contractAddress.trim() || "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"}
                     onCopyAddress={handleCopyAddress}
-                    copied={copied}
                     onAnalyzeBusinessModel={() => setShowAnalyzeModal(true)}
                     reportData={cardStateRef.current.reportData || message.cardData}
                     assessmentCount={cardStateRef.current.assessmentCount}
                     lastEvaluation={cardStateRef.current.lastEvaluation}
-                    linkedToken={cardStateRef.current.linkedToken || ''}
                   />
                 </ErrorBoundary>
               ) : message.messageType === "card" ? (

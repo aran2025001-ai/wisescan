@@ -26,7 +26,7 @@ export default function ReportDetail() {
   const { address } = useAccount()
   const [copied, setCopied] = useState(false)
   const [reportData, setReportData] = useState<any>(null)
-  const [loadingData, setLoadingData] = useState(true)
+  const [_loadingData, setLoadingData] = useState(true)
   const [isAnalyzeModalOpen, setIsAnalyzeModalOpen] = useState(false)
   const [isUpdateRiskModalOpen, setIsUpdateRiskModalOpen] = useState(false)
   const [showPaymentResult, setShowPaymentResult] = useState(false)

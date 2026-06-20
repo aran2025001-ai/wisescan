@@ -76,11 +76,6 @@ export default function MyBusinessModels() {
     navigate(`/profile/business-models/${report.id}`)
   }
 
-  const maskAddress = (addr: string | null): string => {
-    if (!addr) return '未提供'
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`
-  }
-
   const formatDate = (dateStr: string): string => {
     const date = new Date(dateStr)
     return date.toISOString().slice(0, 10)

@@ -69,7 +69,7 @@ export default function MyReports() {
         const seen = new Set<string>()
         const deduped: any[] = []
         for (const r of (rows || [])) {
-          const addr = r.projects?.contract_address?.toLowerCase()
+          const addr = (r as any)?.projects?.contract_address?.toLowerCase()
           if (addr && !seen.has(addr)) {
             seen.add(addr)
             deduped.push(r)

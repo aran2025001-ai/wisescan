@@ -1,11 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Share2 } from 'lucide-react'
 import QRCode from 'qrcode'
 
 export default function InviteLanding() {
-  const [searchParams] = useSearchParams()
-  const code = searchParams.get('code') || ''
   const navigate = useNavigate()
 
   const [qrDataUrl, setQrDataUrl] = useState('')

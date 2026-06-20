@@ -216,7 +216,7 @@ export class TencentAsrClient {
             pcmData[i] = Math.max(-32768, Math.min(32767, Math.round(inputData[srcIdx] * 32768)))
           }
         }
-        this.ws?.send(pcmData.buffer)
+        this.ws?.send(pcmData.buffer as ArrayBuffer)
         chunkCount++
         if (chunkCount <= 3) {
           console.log(`[ASR] 📤 音频块 #${chunkCount}: ${pcmData.length} samples @${actualRate}Hz → ${(pcmData.length / 16).toFixed(0)}ms`)

@@ -4,12 +4,6 @@ import { ChevronLeft, ChevronRight, ChevronDown, Search, AlertCircle, Info, Load
 import { supabase } from "../lib/supabase"
 import type { ProjectRecord } from "../services/projectService"
 
-const AD_BANNERS = [
-  { id: 1, title: "Web3 安全防护指南", color: "from-blue-600 to-blue-800" },
-  { id: 2, title: "智能合约审计服务", color: "from-purple-600 to-purple-800" },
-  { id: 3, title: "风险评估工具推荐", color: "from-indigo-600 to-indigo-800" },
-]
-
 const RISK_LEVELS = [
   { value: "all", label: "全部", color: "bg-zinc-500" },
   { value: "critical", label: "需谨慎", color: "bg-red-600" },
@@ -47,7 +41,7 @@ export default function ProjectLibrary() {
   const [sortAsc, setSortAsc] = useState(false)
   const [showFilterMenu, setShowFilterMenu] = useState(false)
   const [showSortMenu, setShowSortMenu] = useState(false)
-  const [carouselIndex, setCarouselIndex] = useState(0)
+  const [, _setCarouselIndex] = useState(0)
   const [showInfoPopover, setShowInfoPopover] = useState<string | null>(null)
 
   // 🔗 Supabase 数据

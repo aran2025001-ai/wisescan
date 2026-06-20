@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { useAccount } from "wagmi"
-import { ChevronLeft, MessageCirclePlus, Mic, Keyboard, Send, AlertCircle, Gift, ChevronRight, X, Loader2 } from "lucide-react"
+import { ChevronLeft, MessageCirclePlus, Mic, Keyboard, Send, AlertCircle, Gift, ChevronRight, Loader2 } from "lucide-react"
 import { BusinessReportCard } from "@/components/BusinessReportCard"
 import DecomposeMethodologyModal from "@/components/DecomposeMethodologyModal"
 import ShareButton from "@/components/ShareButton"
@@ -83,7 +83,7 @@ export default function BusinessBreakdown() {
   const [isVoiceMode, setIsVoiceMode] = useState(true)
   const [isRecording, setIsRecording] = useState(false)
   const asrClientRef = useRef<TencentAsrClient | null>(null)  // 阶段六：腾讯云 ASR 客户端
-  const [asrError, setAsrError] = useState<string | null>(null)
+  const [asrError, ] = useState<string | null>(null)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [showBackConfirmModal, setShowBackConfirmModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
@@ -97,9 +97,9 @@ export default function BusinessBreakdown() {
   // 阶段五：对话权限状态
   const [chatIsPaid, setChatIsPaid] = useState(isBreakdownPaid)
   const [conversationCount, setConversationCount] = useState(0)
-  const [remainingCount, setRemainingCount] = useState(5)
+  const [, setRemainingCount] = useState(5)
   const [reportData, setReportData] = useState<any>(null)
-  const [isGenerating, setIsGenerating] = useState(false)
+  const [_isGenerating, setIsGenerating] = useState(false)
   const hasResultsRef = useRef(false)
   const resultsCardIdRef = useRef<string | null>(null)
   const [formData, setFormData] = useState({
@@ -116,7 +116,7 @@ export default function BusinessBreakdown() {
     perPersonAmount: number
   }
 
-  const [resultsState, setResultsState] = useState<ResultsState>({
+  const [, __setResultsState] = useState<ResultsState>({
     investmentAmount: 1000,
     directReferrals: 0,
     indirectReferrals: 0,
@@ -160,7 +160,7 @@ export default function BusinessBreakdown() {
     if (!address) { setInviteCount(0); return }
     fetch(`/api/invite/stats?user_address=${address}`)
       .then(r => r.json())
-      .then(j => { if (r.ok) setInviteCount(j.invite_count || 0) })
+      .then(j => { if (j.invite_count !== undefined) setInviteCount(j.invite_count || 0) })
       .catch(() => {})
   }, [address])
 
@@ -774,7 +774,7 @@ export default function BusinessBreakdown() {
           {/* Send Button (only in text mode) */}
           {!isVoiceMode && (
             <button
-              onClick={handleSendMessage}
+              onClick={() => handleSendMessage()}
               disabled={!inputValue.trim()}
               className={`flex-shrink-0 p-2 rounded-lg transition-colors ${
                 inputValue.trim()

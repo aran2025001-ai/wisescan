@@ -3,9 +3,8 @@ import { createPortal } from "react-dom"
 import { useParams, useNavigate } from "react-router-dom"
 import RiskReportCard from "../components/RiskReportCard"
 import ProjectInfoCard from "../components/ProjectInfoCard"
-import EvidenceUpload from "../components/EvidenceUpload"
 import { useAccount } from "wagmi"
-import { ChevronLeft, Copy, Check, Info, Gift, ChevronRight } from "lucide-react"
+import { ChevronLeft, Check } from "lucide-react"
 
 // Risk badge helper (unified with ProjectLibrary)
 const getRiskBadge = (level: number | string) => {
@@ -34,8 +33,8 @@ export default function ProjectDetail() {
   const [error, setError] = useState<string | null>(null)
   const [isAnalyzeModalOpen, setIsAnalyzeModalOpen] = useState(false)
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false)
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
-  const [inviteCount, setInviteCount] = useState(0)  // 已成功邀请人数（>0 则隐藏邀请弹窗）
+  const [, ] = useState(false)
+  const [, setInviteCount] = useState(0)  // 已成功邀请人数
   const [isUpdateRiskModalOpen, setIsUpdateRiskModalOpen] = useState(false)
   const [showPaymentResult, setShowPaymentResult] = useState(false)
   const [paymentResultMsg, setPaymentResultMsg] = useState("")
@@ -100,7 +99,7 @@ export default function ProjectDetail() {
     if (!address) { setInviteCount(0); return }
     fetch(`/api/invite/stats?user_address=${address}`)
       .then(r => r.json())
-      .then(j => { if (r.ok) setInviteCount(j.invite_count || 0) })
+      .then(j => { if (j.invite_count !== undefined) setInviteCount(j.invite_count || 0) })
       .catch(() => {})
   }, [address])
 
@@ -114,7 +113,6 @@ export default function ProjectDetail() {
   }
 
   const handleUnlockReport = () => handleGenerateRiskReport()
-  const handleInvite = () => setIsInviteModalOpen(true)
   const handleAnalyzeBusinessModel = () => setIsAnalyzeModalOpen(true)
   const handleUpdateRiskReport = () => setIsUpdateRiskModalOpen(true)
 
@@ -210,7 +208,6 @@ export default function ProjectDetail() {
   const lastEvaluation = project.last_eval_time
     ? new Date(project.last_eval_time).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
     : '--'
-  const tokens = project.tokens || []
 
   return (
     <div className="text-white flex flex-col">

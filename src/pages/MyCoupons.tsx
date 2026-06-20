@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAccount } from 'wagmi'
-import { ChevronLeft, Ticket } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
 
 type TabType = 'available' | 'expired'
 
