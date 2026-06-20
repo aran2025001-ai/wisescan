@@ -368,7 +368,7 @@ export default function RiskAssessment() {
   const [chatIsPaid, setChatIsPaid] = useState(false)
   const [conversationCount, setConversationCount] = useState(0)
   const [, setRemainingCount] = useState(5)
-  const [, setReportData] = useState<ReportData | null>(null)
+  const [reportData, setReportData] = useState<ReportData | null>(null)
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const [formData, setFormData] = useState({
     projectName: "",
