@@ -1,0 +1,54 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+.vercel
+
+# Windows 保留名文件（Git无法处理）
+nul
+
+# 本地备份 & 内部数据（不上传GitHub）
+backups/
+.workbuddy/
+
+# 环境变量 & 密钥文件（绝不能上传！）
+.env
+.env.local
+.env.production
+
+# 包含真实密钥的测试文件
+test-sdk.mjs
+
+# 所有备份文件（散落在各个目录）
+*.bak_*
+*.bak
+
+# 临时/内部文件（不上传）
+check-table.js
+temp_*
+temp.zip*
+temp_zip/
+__style_backup*/
+__temp_home_restore/
+LAYOUT_MODIFICATION_REPORT.md

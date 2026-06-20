@@ -1,0 +1,122 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@theme {
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(222.2 84% 4.9%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(222.2 84% 4.9%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(222.2 84% 4.9%);
+  --color-primary: hsl(222.2 47.4% 11.2%);
+  --color-primary-foreground: hsl(210 40% 98%);
+  --color-secondary: hsl(210 40% 96.1%);
+  --color-secondary-foreground: hsl(222.2 47.4% 11.2%);
+  --color-muted: hsl(210 40% 96.1%);
+  --color-muted-foreground: hsl(215.4 16.3% 46.9%);
+  --color-accent: hsl(210 40% 96.1%);
+  --color-accent-foreground: hsl(222.2 47.4% 11.2%);
+  --color-destructive: hsl(0 84.2% 60.2%);
+  --color-destructive-foreground: hsl(210 40% 98%);
+  --color-border: 240 4% 21%;               /* #343438 */
+  --color-input: 240 4% 21%;                /* #343438 */
+  --color-ring: hsl(222.2 84% 4.9%);
+  --color-sidebar-background: hsl(0 0% 98%);
+  --color-sidebar-foreground: hsl(240 5.3% 26.1%);
+  --color-sidebar-primary: hsl(240 5.9% 10%);
+  --color-sidebar-primary-foreground: hsl(0 0% 98%);
+  --color-sidebar-accent: hsl(240 4.8% 95.9%);
+  --color-sidebar-accent-foreground: hsl(240 5.9% 10%);
+  --color-sidebar-border: hsl(220 13% 91%);
+  --color-sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --color-chart-1: hsl(12 76% 61%);
+  --color-chart-2: hsl(173 58% 39%);
+  --color-chart-3: hsl(197 37% 24%);
+  --color-chart-4: hsl(43 74% 66%);
+  --color-chart-5: hsl(27 87% 67%);
+  --radius: 0.5rem;
+}
+
+.dark {
+  --color-background: 240 6% 7%;           /* #111113 close to #050505 */
+  --color-foreground: 0 0% 98%;             /* #fafafa */
+  --color-card: 240 6% 10%;                 /* #18181b → close to #09090b */
+  --color-card-foreground: 0 0% 98%;
+  --color-popover: 240 6% 10%;
+  --color-popover-foreground: 0 0% 98%;
+  --color-primary: 210 40% 98%;
+  --color-primary-foreground: 222.2 47.4% 11.2%;
+  --color-secondary: 240 4% 12%;            /* #1f1f23 */
+  --color-secondary-foreground: 0 0% 98%;
+  --color-muted: 240 4% 12%;               /* #1f1f23 */
+  --color-muted-foreground: 240 5% 64%;     /* #9797a0 */
+  --color-accent: 240 4% 12%;
+  --color-accent-foreground: 0 0% 98%;
+  --color-destructive: 0 62.8% 30.6%;
+  --color-destructive-foreground: 210 40% 98%;
+  --color-border: 240 4% 21%;               /* #343438 */
+  --color-input: 240 4% 21%;                /* #343438 */
+  --color-ring: 212.7 26.8% 83.9%;
+  --color-sidebar-background: 240 5.9% 10%;
+  --color-sidebar-foreground: 240 4.8% 95.9%;
+  --color-sidebar-primary: 224.3 76.3% 48%;
+  --color-sidebar-primary-foreground: 0 0% 100%;
+  --color-sidebar-accent: 240 3.7% 15.9%;
+  --color-sidebar-accent-foreground: 240 4.8% 95.9%;
+  --color-sidebar-border: 240 3.7% 15.9%;
+  --color-sidebar-ring: 217.2 91.2% 59.8%;
+  --color-chart-1: 220 70% 50%;
+  --color-chart-2: 160 60% 45%;
+  --color-chart-3: 30 80% 55%;
+  --color-chart-4: 280 65% 60%;
+  --color-chart-5: 340 75% 55%;
+}
+
+/* 连接钱包按钮光晕动画 */
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 14px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 21px rgba(59, 130, 246, 0.6);
+  }
+}
+
+.btn-glow {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+/* 消息渐入动画 - 替代 framer-motion */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.3s ease-out both;
+}
+
+/* shadcn 默认边框和背景 */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+}
+
+html {
+  /* 始终预留滚动条空间，防止内容长度变化时页面横移 */
+  scrollbar-gutter: stable;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+}
