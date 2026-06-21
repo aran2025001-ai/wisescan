@@ -6,8 +6,14 @@
 
 import fetch from 'node-fetch';
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+/**
+ * 获取 OpenRouter API Key（运行时读取，避免模块加载时 env 未初始化）
+ */
+function getApiKey() {
+  return process.env.OPENROUTER_API_KEY;
+}
 
 /**
  * 分析图片内容（通过公开 URL）
@@ -15,7 +21,8 @@ const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
  * @returns {Promise<string>} 中文图片描述，失败返回空字符串
  */
 export async function analyzeImage(imageUrl) {
-  if (!OPENROUTER_API_KEY) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
     console.warn('[Multimodal] OPENROUTER_API_KEY 未配置，跳过图片分析');
     return '';
   }
@@ -31,13 +38,13 @@ export async function analyzeImage(imageUrl) {
     const response = await fetch(OPENROUTER_API_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://wisescan.app',  // OpenRouter 需要
         'X-Title': 'WiseScan Multimodal',
       },
       body: JSON.stringify({
-        model: 'openai/gpt-4o',  // 支持视觉，OpenRouter 可用
+        model: 'qwen/qwen3-vl-32b-instruct',  // Qwen VL 视觉模型，国内可用
         messages: [
           {
             role: 'user',
@@ -98,7 +105,11 @@ export async function analyzeImage(imageUrl) {
  * @returns {Promise<string>}
  */
 export async function analyzeImageBase64(base64Data, mimeType = 'image/png') {
-  if (!OPENROUTER_API_KEY) return '';
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    console.warn('[Multimodal] OPENROUTER_API_KEY 未配置，跳过 base64 图片分析');
+    return '';
+  }
 
   try {
     const controller = new AbortController();
@@ -107,13 +118,13 @@ export async function analyzeImageBase64(base64Data, mimeType = 'image/png') {
     const response = await fetch(OPENROUTER_API_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://wisescan.app',
         'X-Title': 'WiseScan Multimodal',
       },
       body: JSON.stringify({
-        model: 'openai/gpt-4o',
+        model: 'qwen/qwen3-vl-32b-instruct',
         messages: [
           {
             role: 'user',
@@ -139,11 +150,25 @@ export async function analyzeImageBase64(base64Data, mimeType = 'image/png') {
 
     clearTimeout(timeout);
 
-    if (!response.ok) return '';
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.error(`[Multimodal] base64 图片分析 HTTP ${response.status}:`, errText.slice(0, 300));
+      return '';
+    }
     const data = await response.json();
-    return data.choices?.[0]?.message?.content?.trim() || '';
+    const description = data.choices?.[0]?.message?.content?.trim();
+    if (description) {
+      console.log(`[Multimodal] base64 图片分析成功 (${description.length}字):`, description.slice(0, 80) + '...');
+    } else {
+      console.warn('[Multimodal] base64 图片分析返回空描述');
+    }
+    return description || '';
   } catch (error) {
-    console.error('[Multimodal] base64 图片分析失败:', error.message);
+    if (error.name === 'AbortError') {
+      console.error('[Multimodal] base64 图片分析超时（15s）');
+    } else {
+      console.error('[Multimodal] base64 图片分析失败:', error.message);
+    }
     return '';
   }
 }

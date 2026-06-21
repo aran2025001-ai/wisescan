@@ -429,18 +429,7 @@ export default function BusinessBreakdown() {
       return
     }
 
-    // 已支付过 → 静默处理，无弹窗
-    if (isBreakdownPaid || localStorage.getItem(paidKey) === "true") {
-      // 已经生成过卡片 → 直接滚动到已有报告
-      if (hasResultsRef.current && resultsCardIdRef.current) {
-        scrollToCard(resultsCardIdRef.current)
-        return
-      }
-      // 已支付但当前会话未生成 → 直接生成（静默）
-      hasResultsRef.current = true
-      generateResults()
-      return
-    }
+    // 每次拆解都要付费，弹出支付确认弹窗
     setShowPaymentModal(true)
   }
 
@@ -458,6 +447,21 @@ export default function BusinessBreakdown() {
     setIsGenerating(true)
 
     try {
+      // 🖼️ 将上传的图片转为 base64，供 API 端进行 AI 识别
+      let userNotesImages: string[] = []
+      if (businessImageFiles.length > 0) {
+        userNotesImages = await Promise.all(
+          businessImageFiles.map(file => {
+            return new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve(reader.result as string)
+              reader.onerror = () => reject(new Error(`读取图片失败: ${file.name}`))
+              reader.readAsDataURL(file)
+            })
+          })
+        )
+      }
+
       const res = await fetch('/api/generate-business-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -465,6 +469,7 @@ export default function BusinessBreakdown() {
           user_address: address || 'anonymous',
           project_name: formData.projectName || '用户自定义',
           rule_text: formData.businessRule,
+          ...(userNotesImages.length > 0 && { user_notes_images: userNotesImages }),
         }),
       })
 
@@ -476,8 +481,14 @@ export default function BusinessBreakdown() {
         throw new Error(json?.error || `生成失败 (${res.status})`)
       }
 
-      const data = json.data
-      setReportData(data)
+      const { data: reportBody, report_id } = json
+      // API 返回结构：{ success: true, data: { pattern_type, share_card, ... }, report_id }
+      // 直接展开 data 内容，report_id 作为 id，project_name 从表单或 share_card 取
+      setReportData({
+        ...reportBody,
+        id: report_id,
+        project_name: formData.projectName || reportBody.share_card?.project_name || '未命名项目',
+      })
 
       // 移除 loading 消息，添加报告卡片
       setMessages(prev => {
@@ -827,6 +838,12 @@ export default function BusinessBreakdown() {
               <button
                 onClick={() => {
                   setShowConfirmModal(false)
+                  // 🔒 退出当前话题 → 支付记录归零
+                  localStorage.removeItem(paidKey)
+                  setIsBreakdownPaid(false)
+                  // 清空表单和上传的图片
+                  setFormData({ projectName: "", businessRule: "", uploadedImages: "" })
+                  setBusinessImageFiles([])
                   setMessages(initialMessages())
                   setInputValue("")
                   setIsVoiceMode(true)
@@ -896,6 +913,12 @@ export default function BusinessBreakdown() {
               <button
                 onClick={() => {
                   setShowBackConfirmModal(false)
+                  // 🔒 退出当前话题 → 支付记录归零
+                  localStorage.removeItem(paidKey)
+                  setIsBreakdownPaid(false)
+                  // 清空表单和上传的图片
+                  setFormData({ projectName: "", businessRule: "", uploadedImages: "" })
+                  setBusinessImageFiles([])
                   navigate("/home")
                 }}
                 className="flex-1 py-1.5 px-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs"

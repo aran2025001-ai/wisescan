@@ -42,12 +42,7 @@ const Channels = [
     id: 'bluetooth',
     label: '蓝牙',
     iconBg: '#0078D7',
-    iconSvg: (
-      // 正确的蓝牙图标（不是位置图标）
-      <svg viewBox="0 0 24 24" width="26" height="26" fill="white">
-        <path d="M6 19l5-5v-4l-5-5v14zm0-8v-2h5v2H6zm12-6l-7 7 7 7V1zM11 12l7 7v-14l-7 7z"/>
-      </svg>
-    ),
+    iconUrl: 'https://cdn.simpleicons.org/bluetooth/ffffff',
   },
   {
     id: 'more',

@@ -40,8 +40,18 @@ export default function BusinessReportDetailPage() {
             setError(fetchError.message)
           }
         } else if (data) {
-          // 设置报告数据
-          setReportData(data.report_data)
+          // 设置报告数据 —— 对齐生成页结构：以 AI 响应（report_data）为基准，合并数据库字段
+          // project_name 优先取数据库值，但如果是"用户自定义"则用 AI share_card 的
+          const dbProjectName = data.project_name
+          const aiProjectName = data.report_data?.share_card?.project_name
+          const effectiveName = (dbProjectName && dbProjectName !== '用户自定义' && dbProjectName !== '未命名项目')
+            ? dbProjectName
+            : (aiProjectName || '未命名项目')
+          setReportData({
+            ...data.report_data,
+            id: data.id,
+            project_name: effectiveName,
+          })
           // 如果 project_name 是"用户自定义"，从 plain_explanation 提取
           let pName = data.project_name
           if (pName === '用户自定义' && data.report_data?.plain_explanation) {

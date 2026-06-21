@@ -34,9 +34,10 @@ export default function MyBusinessModels() {
     try {
       const { data, error: fetchError } = await supabase
         .from('business_reports')
-        .select('*')
-        .eq('user_address', address.toLowerCase())
+        .select('id, project_name, pattern_type, created_at, report_data')
+        .ilike('user_address', address.toLowerCase())
         .order('created_at', { ascending: false })
+        .limit(50)
 
       if (fetchError) {
         console.error('获取报告失败:', fetchError.message)

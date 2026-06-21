@@ -148,7 +148,7 @@ function RiskReportCard({
   const rawDims = reportData?.six_dimensions
   // 检测哪些维度的得分为 null/undefined（用于雷达图下方标注）
   const dimsWithNullScore: string[] = Array.isArray(rawDims)
-    ? rawDims.filter((d: any) => !(typeof d.score === 'number' && !Number.Number.isNaN(d.score))).map((d: any) => d.dimension || "未知维度").filter(Boolean)
+    ? rawDims.filter((d: any) => !(typeof d.score === 'number' && !Number.isNaN(d.score))).map((d: any) => d.dimension || "未知维度").filter(Boolean)
     : []
   const dimensions: Array<{ dimension: string; score: number; max: number; deduction: string }> = (
     Array.isArray(rawDims) && rawDims.length > 0

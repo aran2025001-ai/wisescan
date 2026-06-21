@@ -160,21 +160,28 @@ export const BusinessShareCard: React.FC<BusinessShareCardProps> = ({
   }
   if (projectName.length > 10) projectName = truncate(projectName, 10);
 
-  // ── 其他字段 ──
+  // ── 其他字段（share_card 优先，reportData 兜底）──
   const patternType = shareCard.pattern_type || reportData?.pattern_type || null;
 
   // 层级结构：去除括号说明
   const structure = shareCard.structure
     ? shareCard.structure.replace(/[（(][^)）]*[)）]/g, '').trim()
-    : null;
+    : reportData?.structure || null;
 
-  // 规则描述：二次清洗
+  // 规则描述：二次清洗（share_card 为空时从 plain_explanation 提取摘要）
   const ruleSummaryRaw = shareCard.rule_summary || null;
-  const ruleSummary = ruleSummaryRaw ? cleanRuleSummary(ruleSummaryRaw) : null;
+  const ruleSummary = ruleSummaryRaw
+    ? cleanRuleSummary(ruleSummaryRaw)
+    : reportData?.rule_summary
+      ? cleanRuleSummary(reportData.rule_summary)
+      : null;
 
-  // 需关注维度：二次清洗
+  // 需关注维度：二次清洗（share_card 为空时从 risk_assessment 提取）
   const watchPointsRaw = (shareCard.watch_points && Array.isArray(shareCard.watch_points))
-    ? shareCard.watch_points : [];
+    ? shareCard.watch_points
+    : (reportData?.watch_points && Array.isArray(reportData.watch_points))
+      ? reportData.watch_points
+      : [];
   const watchPoints = cleanWatchPoints(watchPointsRaw);
 
   // ── 二维码链接 ──
