@@ -103,6 +103,7 @@ export default function BusinessBreakdown() {
   const hasResultsRef = useRef(false)
   const resultsCardIdRef = useRef<string | null>(null)
   const [formData, setFormData] = useState({
+    projectName: "",
     businessRule: "",
     uploadedImages: "",
   })
@@ -462,7 +463,7 @@ export default function BusinessBreakdown() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_address: address || 'anonymous',
-          project_name: '用户自定义',
+          project_name: formData.projectName || '用户自定义',
           rule_text: formData.businessRule,
         }),
       })
@@ -617,6 +618,18 @@ export default function BusinessBreakdown() {
                   {/* Instructions */}
                   <div className="pb-1">
                     <span className="text-xs text-zinc-400 leading-snug">请尽可能完整地提供以下信息。您给得越详细，拆解和算账就越精准。</span>
+                  </div>
+
+                  {/* Project Name */}
+                  <div className="space-y-1 -mt-1">
+                    <label className="text-sm text-white">项目名称</label>
+                    <input
+                      type="text"
+                      placeholder="输入项目名称"
+                      value={formData.projectName}
+                      onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
+                      className="w-full px-3 py-2 bg-zinc-800 text-white text-sm rounded border border-[#343438] placeholder:text-xs placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                    />
                   </div>
 
                   {/* Business Rule - textarea without red * */}

@@ -4,8 +4,44 @@ import ProjectInfoCard from "./ProjectInfoCard"
 import { generateComprehensiveReview } from "../utils/reviewGenerator"
 import { normalizeReportData } from "../utils/normalizeReport"
 import { renderEvidenceTaggedText } from "../utils/evidenceTags"
-import { Copy, Check, Info } from "lucide-react"
-import ShareButton from "./ShareButton"
+import { Copy, Check } from "lucide-react"
+import ShareProjectDrawer from "./ShareProjectDrawer"
+
+// ===== 简短点评生成器 =====
+function generateShortReview(reportData: any): string {
+  if (!reportData) return '数据采集中，解锁查看完整报告'
+  const dims = (reportData.six_dimensions || []) as any[]
+  const positives: string[] = []
+  const negatives: string[] = []
+  const codeDim = dims.find((d: any) => d.dimension?.includes('代码'))
+  if (codeDim) {
+    if (codeDim.score >= 18 || codeDim.deduction?.includes('无扣分')) positives.push('已完成审计')
+    else if (codeDim.score <= 8 || codeDim.deduction?.includes('未审计')) negatives.push('尚未完成审计')
+  }
+  const funding = reportData.funding_record
+  if (funding && funding !== '未知' && funding !== '无' && funding !== '--') positives.push('有融资记录')
+  if (reportData.onChainData?.goplus?.isOpenSource === true) positives.push('合约开源')
+  const lp = reportData.onChainData?.goplus?.lpLockStatus || reportData.liquidity_lock
+  if (lp === '已锁定') positives.push('LP已锁定')
+  const teamDim = dims.find((d: any) => d.dimension?.includes('团队'))
+  if (teamDim?.deduction?.includes('匿名') || teamDim?.score <= 8) negatives.push('团队匿名')
+  const histDim = dims.find((d: any) => d.dimension?.includes('历史'))
+  if (histDim?.deduction?.includes('变更')) {
+    const changes = (reportData.history_mode_changes || '').toString()
+    const changeCount = parseInt(changes)
+    if (!Number.isNaN(changeCount) && changeCount >= 2) negatives.push(`曾有过${changeCount}次模式变更`)
+    else negatives.push('曾有过模式变更')
+  }
+  const goplusTop10 = reportData.onChainData?.goplus?.top10Percent
+  const t10 = goplusTop10 !== null && goplusTop10 !== undefined ? Number(goplusTop10) : parseInt(reportData.top10_concentration)
+  if (!Number.isNaN(t10) && t10 >= 70) negatives.push('持仓高度集中')
+  if (positives.length === 0 && negatives.length === 0) return '数据采集中，解锁查看完整报告'
+  const posPart = positives.slice(0, 2).join('并')
+  const negPart = negatives.slice(0, 2).join('且')
+  if (posPart && negPart) return `${posPart}，但${negPart}。`
+  if (posPart) return `${posPart}，解锁查看详情。`
+  return `${negPart}，建议深入评估。`
+}
 
 interface DimensionRow {
   dimension: string
@@ -91,12 +127,16 @@ export default function RiskReportCard({
   const [isTokenExpanded, setIsTokenExpanded] = useState(false)
   const [showInfoPopover, setShowInfoPopover] = useState(false)
 
+  // 🔗 链上数据（提前声明，避免 TDZ — 必须在所有使用之前）
+  const onChain = reportData?.onChainData
+  const effectiveOnChain = onChain
+
   // 📊 数据驱动：有 reportData 用真实数据，否则用 mock
   // 🔧 数据清洗：确保所有字段都存在，防止渲染崩溃
   const rawDimensions = reportData?.six_dimensions
   // 检测哪些维度的得分为 null/undefined（用于雷达图下方标注）
   const dimsWithNullScore: string[] = Array.isArray(rawDimensions) && rawDimensions.length > 0
-    ? rawDimensions.filter((d: any) => !(typeof d.score === 'number' && !isNaN(d.score))).map((d: any) => d.dimension || "未知维度").filter(Boolean)
+    ? rawDimensions.filter((d: any) => !(typeof d.score === 'number' && !Number.isNaN(d.score))).map((d: any) => d.dimension || "未知维度").filter(Boolean)
     : []
   const dimensions: DimensionRow[] = Array.isArray(rawDimensions) && rawDimensions.length > 0
     ? rawDimensions.map((d: any) => ({
@@ -115,24 +155,34 @@ export default function RiskReportCard({
       ]
 
   // 安全获取分数（防止 NaN/Infinity）
-  const totalScore = typeof reportData?.total_score === 'number' && !isNaN(reportData.total_score)
+  const totalScore = typeof reportData?.total_score === 'number' && !Number.isNaN(reportData.total_score)
     ? Math.round(reportData.total_score) : 45
-  const hasRealTotalScore = typeof reportData?.total_score === 'number' && !isNaN(reportData.total_score)
+  const hasRealTotalScore = typeof reportData?.total_score === 'number' && !Number.isNaN(reportData.total_score)
   const riskLevel = (reportData?.risk_level && typeof reportData.risk_level === 'string')
     ? reportData.risk_level : "高风险"
   const conclusion = (reportData?.conclusion && typeof reportData.conclusion === 'string')
     ? reportData.conclusion : "不建议参与"
 
-  // 信息完整性评分（用于分享卡片）
-  const dims = reportData?.six_dimensions || []
-  const totalMax = dims.reduce((s: number, d: any) => s + (d.max || 0), 0)
-  const infoCompleteness = totalMax > 0
-    ? Math.round(dims.reduce((s: number, d: any) => s + (d.score || 0), 0) / totalMax * 100)
-    : 30
+  // Top10 硬数据
+  const top10Raw = reportData?.onChainData?.goplus?.top10Percent
+  const shareTop10Holding = (top10Raw !== null && top10Raw !== undefined && !Number.isNaN(Number(top10Raw)))
+    ? Number(top10Raw) : 0
+  const shareRiskLevel = shareTop10Holding >= 70 ? '高度集中' : shareTop10Holding >= 50 ? '中度集中' : '分布较分散'
+  const shareRiskColor: 'red' | 'orange' | 'yellow' | 'green' = shareTop10Holding >= 70 ? 'red' : shareTop10Holding >= 50 ? 'yellow' : 'green'
 
-  // 🔗 链上真实数据（来自 NodeReal BSCTrace RPC）
-  // ⚠️ linkedToken 由父组件从 API 响应的顶层 onChainData 传入，不要在这里重新计算
-  const onChain = reportData?.onChainData
+  // 信息完整性评分：自动计算
+  const infoCompleteness = (() => {
+    let s = 10
+    if (projectName && projectName !== '未命名项目') s += 5
+    if (contractAddress && contractAddress !== '0x742d35Cc6634C0532925a3b844Bc454e4438f44e') s += 5
+    const hasOnChain = !!effectiveOnChain?.tokenName && effectiveOnChain.tokenName !== '未知'
+    if (hasOnChain) s += 20
+    if (reportData?.total_score !== undefined && reportData.total_score > 0) s += 20
+    if (reportData?.public_opinion) s += 10
+    if (reportData?.ai_summary) s += 10
+    return hasOnChain ? Math.min(s, 95) : Math.min(s, 75)
+  })()
+  const completenessLevel = infoCompleteness >= 70 ? '较高' : infoCompleteness >= 45 ? '中等' : '较低'
   const hasOnChain = !!onChain?.tokenName && onChain.tokenName !== '未知'
   const displayLinkedToken = linkedToken || (hasOnChain ? onChain!.tokenSymbol : undefined) || projectName || undefined
 
@@ -201,7 +251,7 @@ export default function RiskReportCard({
       {/* 详细评分表 */}
       <div className="px-4 py-3 space-y-3">
         {dimensions.map((item, i) => {
-          const hasScore = typeof item.score === 'number' && !isNaN(item.score)
+          const hasScore = typeof item.score === 'number' && !Number.isNaN(item.score)
           return (
           <div key={i} className={`text-sm ${i > 0 ? "border-t border-[#343438] pt-3" : ""}`}>
             <p className="text-blue-400 font-semibold text-xs mb-1">{item.dimension}（{item.max} 分）</p>
@@ -278,15 +328,15 @@ export default function RiskReportCard({
       <div className="space-y-2 px-4 pb-2">
         <div className="border-t border-[#343438] -mx-4"></div>
 
-        <ShareButton
-          type="project"
-          data={{
-            projectName,
-            contractAddress,
-            riskLabel: riskLevel,
-            infoCompleteness,
-            summary: conclusion,
-          }}
+        <ShareProjectDrawer
+          projectName={projectName}
+          contractAddress={contractAddress}
+          top10Holding={shareTop10Holding}
+          riskLevel={shareRiskLevel}
+          riskColor={shareRiskColor}
+          infoCompleteness={infoCompleteness}
+          completenessLevel={completenessLevel}
+          review={generateShortReview(reportData)}
           label="分享项目情报"
           className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-xs font-medium py-2.5 rounded-full transition-colors"
         />

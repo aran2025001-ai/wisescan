@@ -55,10 +55,10 @@ function ensureString(v: unknown, fallback = ''): string {
 }
 
 function ensureNumber(v: unknown, fallback = 0): number {
-  if (typeof v === 'number' && !isNaN(v)) return v
+  if (typeof v === 'number' && !Number.isNaN(v)) return v
   if (typeof v === 'string') {
     const n = parseFloat(v)
-    if (!isNaN(n)) return n
+    if (!Number.isNaN(n)) return n
   }
   return fallback
 }

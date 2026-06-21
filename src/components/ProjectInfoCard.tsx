@@ -2,10 +2,11 @@ import { useState, useEffect, useRef, type MutableRefObject } from "react"
 import { createPortal } from "react-dom"
 import { useNavigate } from "react-router-dom"
 import { useAccount } from "wagmi"
-import { Copy, Check, Info, Share2, Gift, ChevronRight, AlertCircle, X } from "lucide-react"
+import { Copy, Check, Info, Gift, ChevronRight, AlertCircle, X } from "lucide-react"
 import { copyToClipboard } from "../utils/clipboard"
 import EvidenceUpload from "./EvidenceUpload"
 import ShareButton from "./ShareButton"
+import ShareProjectDrawer from "./ShareProjectDrawer"
 
 // ===== 简短点评生成器：固定逻辑，提取所有关键事实，生成≤30字的一句话 =====
 function generateShortReview(reportData: any): string {
@@ -15,7 +16,7 @@ function generateShortReview(reportData: any): string {
   const positives: string[] = []
   const negatives: string[] = []
 
-  // 1. 审计状态 (代码与技术安全)
+  // 1. 审计状态
   const codeDim = dims.find((d: any) => d.dimension?.includes('代码'))
   if (codeDim) {
     if (codeDim.score >= 18 || codeDim.deduction?.includes('无扣分')) positives.push('已完成审计')
@@ -29,7 +30,7 @@ function generateShortReview(reportData: any): string {
   // 3. 合约开源
   if (reportData.onChainData?.goplus?.isOpenSource === true) positives.push('合约开源')
 
-  // 4. LP锁仓（优先 GoPlus 硬数据）
+  // 4. LP锁仓
   const lp = reportData.onChainData?.goplus?.lpLockStatus || reportData.liquidity_lock
   if (lp === '已锁定') positives.push('LP已锁定')
 
@@ -37,38 +38,30 @@ function generateShortReview(reportData: any): string {
   const teamDim = dims.find((d: any) => d.dimension?.includes('团队'))
   if (teamDim?.deduction?.includes('匿名') || teamDim?.score <= 8) negatives.push('团队匿名')
 
-  // 6. 模式变更 — 完整描述，让"但X"读起来自然
+  // 6. 模式变更
   const histDim = dims.find((d: any) => d.dimension?.includes('历史'))
   if (histDim?.deduction?.includes('变更')) {
     const changes = (reportData.history_mode_changes || '').toString()
     const changeCount = parseInt(changes)
-    if (!isNaN(changeCount) && changeCount >= 2) {
+    if (!Number.isNaN(changeCount) && changeCount >= 2) {
       negatives.push(`曾有过${changeCount}次模式变更`)
     } else {
       negatives.push('曾有过模式变更')
     }
   }
 
-  // 7. TOP10持仓集中度（优先 GoPlus 硬数据）
+  // 7. TOP10持仓集中度
   const goplusTop10 = reportData.onChainData?.goplus?.top10Percent
   const t10 = goplusTop10 !== null && goplusTop10 !== undefined
     ? Number(goplusTop10)
     : parseInt(reportData.top10_concentration)
-  if (!isNaN(t10) && t10 >= 70) negatives.push('持仓高度集中')
+  if (!Number.isNaN(t10) && t10 >= 70) negatives.push('持仓高度集中')
 
   if (positives.length === 0 && negatives.length === 0) return '数据采集中，解锁查看完整报告'
 
-  // 固定逻辑：尽可能多地提取事实，构造 "正面事实，但负面事实。" 结构
-  // 使用 hash 替代随机，确保同份数据每次都一致
-  const hash = (s: string) => s.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
-
-  // 固定排序：按原始顺序（非随机），保证同一数据每次生成一致
   const buildSentence = (): string => {
-    // 正面部分：取前2个优先项
     const posPart = positives.slice(0, 2).join('并')
-    // 负面部分：取前2个优先项
     const negPart = negatives.slice(0, 2).join('且')
-
     if (posPart && negPart) {
       return `${posPart}，但${negPart}。`
     } else if (posPart) {
@@ -143,7 +136,6 @@ export default function ProjectInfoCard({
   const [copied, setCopied] = useState(false)
   const [showInfoPopover, setShowInfoPopover] = useState(false)
   const [isTokenExpanded, setIsTokenExpanded] = useState(false)
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
   const [isUnlockConfirmOpen, setIsUnlockConfirmOpen] = useState(false)
   const [showEvidenceModal, setShowEvidenceModal] = useState(false)
   const [localInviteCode, setLocalInviteCode] = useState<string>('')
@@ -170,7 +162,8 @@ export default function ProjectInfoCard({
     if (reportData?.total_score !== undefined && reportData.total_score > 0) s += 20
     if (reportData?.public_opinion) s += 10
     if (reportData?.ai_summary) s += 10
-    return hasOnChain ? Math.min(s, 95) : Math.min(s, 75)
+    const score = hasOnChain ? Math.min(s, 95) : Math.min(s, 75)
+    return score
   })()
   const displayLabel = integrityLabel || (displayScore >= 70 ? '较高' : displayScore >= 45 ? '中等' : '较低')
 
@@ -210,7 +203,7 @@ export default function ProjectInfoCard({
     const val = reportData?.top10_concentration
     if (!val || val === '未知' || val === '--') return null
     const pct = parseInt(val)
-    if (isNaN(pct)) {
+    if (Number.isNaN(pct)) {
       if (val.includes('极高') || val.includes('集中')) return { text: val, color: 'text-red-400', icon: '🔴' }
       if (val.includes('中度') || val.includes('偏高')) return { text: val, color: 'text-yellow-400', icon: '🟡' }
       return { text: val, color: 'text-green-400', icon: '🟢' }
@@ -336,6 +329,23 @@ export default function ProjectInfoCard({
 
   // 简短点评：从报告数据中提取关键事实，生成≤30字的一句话
   const shortReview = generateShortReview(reportData)
+
+  // ── 分享卡片所需数据 ──
+  const shareTop10Holding = (() => {
+    const goplusTop10 = effectiveOnChain?.goplus?.top10Percent
+    if (goplusTop10 !== null && goplusTop10 !== undefined) {
+      const pct = Number(goplusTop10)
+      if (!Number.isNaN(pct)) return pct
+    }
+    const val = reportData?.top10_concentration
+    if (val) {
+      const parsed = parseInt(val)
+      if (!Number.isNaN(parsed)) return parsed
+    }
+    return 0
+  })()
+  const shareRiskLevel = shareTop10Holding >= 70 ? '高度集中' : shareTop10Holding >= 50 ? '中度集中' : '分布较分散'
+  const shareRiskColor: 'red' | 'orange' | 'yellow' | 'green' = shareTop10Holding >= 70 ? 'red' : shareTop10Holding >= 50 ? 'yellow' : 'green'
 
   return (
     <div className={isEmbedded ? "px-4 py-3 space-y-3" : "bg-zinc-800 rounded-lg border border-[#343438] p-4 space-y-4 w-full"}>
@@ -469,28 +479,17 @@ export default function ProjectInfoCard({
           <p className="text-zinc-500 text-xs text-center">数据基于公开信息，仅供参考</p>
           <div className="border-t border-[#343438] -mx-4"></div>
 
-          <button
-            onClick={() => setIsShareModalOpen(true)}
+          <ShareProjectDrawer
+            projectName={projectName}
+            contractAddress={contractAddress}
+            top10Holding={shareTop10Holding}
+            riskLevel={shareRiskLevel}
+            riskColor={shareRiskColor}
+            infoCompleteness={displayScore}
+            completenessLevel={displayLabel}
+            review={shortReview}
             className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-xs font-medium py-2.5 rounded-full transition-colors"
-          >
-            <Share2 className="w-4 h-4" />
-            分享项目情报
-          </button>
-
-          {/* 分享模态框 */}
-          {isShareModalOpen && createPortal(
-            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]" onClick={() => setIsShareModalOpen(false)}>
-              <div className="bg-zinc-900 rounded-lg p-4 w-80 mx-4 space-y-3 border border-[#343438]" onClick={(e) => e.stopPropagation()}>
-                <h3 className="text-white font-semibold text-sm text-center">分享项目情报</h3>
-                <p className="text-zinc-300 text-xs leading-relaxed text-center">将项目情报卡片分享给好友</p>
-                <div className="flex gap-3 pt-1">
-                  <button onClick={() => setIsShareModalOpen(false)} className="flex-1 py-1.5 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-xs">取消</button>
-                  <button onClick={() => { alert("项目情报图片生成功能开发中，后续将支持"); setIsShareModalOpen(false) }} className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-xs">分享</button>
-                </div>
-              </div>
-            </div>,
-            document.body
-          )}
+          />
           {/* 解锁支付确认弹窗 */}
           {isUnlockConfirmOpen && createPortal(
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]" onClick={() => setIsUnlockConfirmOpen(false)}>

@@ -4,6 +4,7 @@ import { AlertCircle, Users, Lightbulb, ShieldAlert } from "lucide-react"
 import { renderEvidenceTaggedText } from "../utils/evidenceTags"
 import ReactECharts from 'echarts-for-react'
 import ShareButton from "./ShareButton"
+import BusinessShareDrawer from "./BusinessShareDrawer"
 
 /**
  * BusinessReportCard - 接受 DeepSeek API 返回的动态数据
@@ -88,6 +89,15 @@ function buildTreeOption(treeData: TreeNode) {
         align: 'center' as const,
         fontSize: 10,
         color: '#e4e4e7',
+        formatter: (params: any) => {
+          const name = params.name || '';
+          if (name.length <= 6) return name;
+          let result = '';
+          for (let i = 0; i < name.length; i += 6) {
+            result += name.slice(i, i + 6) + '\n';
+          }
+          return result.trim();
+        },
       },
       leaves: { label: { position: 'bottom' as const } },
       expandAndCollapse: true,
@@ -375,16 +385,13 @@ export function BusinessReportCard({
           <p className="text-xs text-zinc-500">以上分析基于您提供的规则文本，动静态分析仅供参考，不构成投资建议。</p>
           <div className="border-t border-[#343438] -mx-4"></div>
 
-          <ShareButton
-            type="business"
-            data={{
-              projectName: name,
-              patternType: reportData?.pattern_type,
-              businessSummary: reportData?.plain_explanation,
-              riskLabel: reportData?.risk_assessment?.level,
-            }}
-            label="分享拆解结果"
-            className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-xs font-medium py-2.5 rounded-full transition-colors"
+          <BusinessShareDrawer
+            reportData={reportData}
+            trigger={
+              <button className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-xs font-medium py-2.5 rounded-full transition-colors">
+                分享拆解结果
+              </button>
+            }
           />
 
           {!hideAssessRisk && (

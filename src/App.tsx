@@ -23,6 +23,7 @@ const BusinessReportDetailPage = lazy(() => import('./pages/BusinessReportDetail
 const WithdrawalHistory = lazy(() => import('./pages/WithdrawalHistory'))
 const Feedback = lazy(() => import('./pages/Feedback'))
 const InviteLanding = lazy(() => import('./pages/InviteLanding'))
+const ShareCardPreview = lazy(() => import('./pages/ShareCardPreview'))
 
 function LazyFallback() {
   return (
@@ -95,6 +96,7 @@ export default function App() {
                 <Route path="/profile/feedback" element={<Feedback />} />
                 <Route path="/profile/withdrawal" element={<WithdrawalHistory />} />
                 <Route path="/invite" element={<InviteLanding />} />
+                <Route path="/preview/share-card" element={<ShareCardPreview />} />
               </Routes>
             </Suspense>
           </ErrorBoundary>
