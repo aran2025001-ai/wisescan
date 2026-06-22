@@ -526,6 +526,7 @@ export default function RiskAssessment() {
   const reportFailedRef = useRef(false)  // 报告生成失败标记，允许免费重试
   const followUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)  // 跟进消息定时器
   const isOnboardingRef = useRef(false)  // 引导推送中标记（推送期间不自动滚动）
+  const onboardingTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])  // 引导推送定时器（用于清理）
 
   // 钱包断开时重定向
   useEffect(() => {
@@ -567,14 +568,16 @@ export default function RiskAssessment() {
     } else {
       // 新用户：逐步推送（每条间隔 2 秒）
       isOnboardingRef.current = true
+      onboardingTimersRef.current = []
       all.forEach((msg, i) => {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
           setMessages(prev => [...prev, msg])
           // 最后一条推送完成后恢复自动滚动
           if (i === all.length - 1) {
             setTimeout(() => { isOnboardingRef.current = false }, 100)
           }
         }, i * 2000)
+        onboardingTimersRef.current.push(timer)
       })
     }
   }, [])
@@ -1331,6 +1334,10 @@ export default function RiskAssessment() {
 
   const confirmNewConversation = () => {
     skipInitialScrollRef.current = true
+    // 清理正在进行中的引导推送定时器（防止重复消息）
+    onboardingTimersRef.current.forEach(clearTimeout)
+    onboardingTimersRef.current = []
+    isOnboardingRef.current = false
     setMessages(initialMessages())
     setFormData({ projectName: "", contractAddress: "", website: "", community: "", whitepaper: "", remarks: "", images: [] })
     setInputValue("")
@@ -1412,7 +1419,7 @@ export default function RiskAssessment() {
   }
 
   return (
-    <div className="text-white flex flex-col">
+    <div className="text-white flex flex-col h-screen">
       {/* Header */}
       <div className="sticky top-0 z-40 border-b border-[#343438] bg-black backdrop-blur">
         <div className="flex items-center justify-between px-4 py-2">

@@ -126,6 +126,7 @@ export default function BusinessBreakdown() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const isOnboardingRef = useRef(false)  // 引导推送中标记（推送期间不自动滚动）
+  const onboardingTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])  // 引导推送定时器（用于清理）
   const location = useLocation()
 
   // 每次路由导航到本页时，强制滚回顶部
@@ -212,14 +213,17 @@ export default function BusinessBreakdown() {
     } else {
       // 新用户：逐步推送（每条间隔 2 秒）
       isOnboardingRef.current = true
+      onboardingTimersRef.current = []
       all.forEach((msg, i) => {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
           setMessages(prev => [...prev, msg])
           // 最后一条推送完成后恢复自动滚动
           if (i === all.length - 1) {
             setTimeout(() => { isOnboardingRef.current = false }, 100)
           }
         }, i * 2000)
+        onboardingTimersRef.current.push(timer)
+      })
       })
     }
   }, [])
@@ -573,7 +577,7 @@ export default function BusinessBreakdown() {
   }
 
   return (
-    <div className="text-white flex flex-col">
+    <div className="text-white flex flex-col h-screen">
       {/* Header */}
       <div className="sticky top-0 z-40 border-b border-[#343438] bg-black backdrop-blur">
         <div className="flex items-center justify-between px-4 py-2">
@@ -872,6 +876,10 @@ export default function BusinessBreakdown() {
                   // 清空表单和上传的图片
                   setFormData({ projectName: "", businessRule: "", uploadedImages: "" })
                   setBusinessImageFiles([])
+                  // 清理引导推送定时器（防止重复消息）
+                  onboardingTimersRef.current.forEach(clearTimeout)
+                  onboardingTimersRef.current = []
+                  isOnboardingRef.current = false
                   setMessages(initialMessages())
                   setInputValue("")
                   setIsVoiceMode(true)
