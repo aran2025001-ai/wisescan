@@ -412,7 +412,7 @@ export default function RiskAssessment() {
   const location = useLocation()
   const { isConnected, address } = useAccount()
 
-  const [messages, setMessages] = useState<Message[]>(initialMessages)
+  const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
   const [isVoiceMode, setIsVoiceMode] = useState(true)
   const [isRecording, setIsRecording] = useState(false)
@@ -525,6 +525,7 @@ export default function RiskAssessment() {
   const loadingMsgIdRef = useRef<string | null>(null)
   const reportFailedRef = useRef(false)  // 报告生成失败标记，允许免费重试
   const followUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)  // 跟进消息定时器
+  const isOnboardingRef = useRef(false)  // 引导推送中标记（推送期间不自动滚动）
 
   // 钱包断开时重定向
   useEffect(() => {
@@ -539,6 +540,8 @@ export default function RiskAssessment() {
   }, [location.key])
 
   useEffect(() => {
+    // 引导推送期间不自动滚动（新用户逐步引导时保留阅读位置）
+    if (isOnboardingRef.current) return
     // 首次进入页面：跳过自动滚到底部，停留在顶部
     if (skipInitialScrollRef.current) {
       skipInitialScrollRef.current = false
@@ -552,6 +555,29 @@ export default function RiskAssessment() {
     }
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
+
+  // 新用户引导：逐步推送消息，完成后恢复自动滚动
+  useEffect(() => {
+    const onboarded = localStorage.getItem('wisescan_completed_first_scan') === 'true'
+    const all = initialMessages()
+
+    if (onboarded) {
+      // 老用户：直接全展示
+      setMessages(all)
+    } else {
+      // 新用户：逐步推送（每条间隔 2 秒）
+      isOnboardingRef.current = true
+      all.forEach((msg, i) => {
+        setTimeout(() => {
+          setMessages(prev => [...prev, msg])
+          // 最后一条推送完成后恢复自动滚动
+          if (i === all.length - 1) {
+            setTimeout(() => { isOnboardingRef.current = false }, 100)
+          }
+        }, i * 2000)
+      })
+    }
+  }, [])
 
   /** 滚动到聊天容器底部 */
   const scrollToBottom = () => {
@@ -1294,6 +1320,8 @@ export default function RiskAssessment() {
     pendingCardScrollRef.current = true
     setMessages((prev) => [...prev, cardMessage])
     scrollToCard(cardId)
+    // ✅ 首次扫描完成标记（老用户下次进入直接展示全部内容）
+    localStorage.setItem('wisescan_completed_first_scan', 'true')
     setIsGeneratingReport(false)  // 🔓 卡片生成完毕，解锁
   }
 

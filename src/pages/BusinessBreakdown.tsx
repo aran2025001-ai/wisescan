@@ -77,7 +77,7 @@ export default function BusinessBreakdown() {
   const { isConnected, address } = useAccount()
 
 
-  const [messages, setMessages] = useState<Message[]>(initialMessages)
+  const [messages, setMessages] = useState<Message[]>([])
 
   const [inputValue, setInputValue] = useState("")
   const [isVoiceMode, setIsVoiceMode] = useState(true)
@@ -125,6 +125,7 @@ export default function BusinessBreakdown() {
   })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const isOnboardingRef = useRef(false)  // 引导推送中标记（推送期间不自动滚动）
   const location = useLocation()
 
   // 每次路由导航到本页时，强制滚回顶部
@@ -186,6 +187,8 @@ export default function BusinessBreakdown() {
   // 新消息时滚到底部，但跳过首次渲染（location.key effect 已经滚到顶部）
   const skipScrollRef = useRef(true)
   useEffect(() => {
+    // 引导推送期间不自动滚动（新用户逐步引导时保留阅读位置）
+    if (isOnboardingRef.current) return
     if (skipScrollRef.current) {
       skipScrollRef.current = false
       return
@@ -197,6 +200,29 @@ export default function BusinessBreakdown() {
     }
     scrollToBottom()
   }, [messages])
+
+  // 新用户引导：逐步推送消息，完成后恢复自动滚动
+  useEffect(() => {
+    const onboarded = localStorage.getItem('wisescan_completed_first_scan') === 'true'
+    const all = initialMessages()
+
+    if (onboarded) {
+      // 老用户：直接全展示
+      setMessages(all)
+    } else {
+      // 新用户：逐步推送（每条间隔 2 秒）
+      isOnboardingRef.current = true
+      all.forEach((msg, i) => {
+        setTimeout(() => {
+          setMessages(prev => [...prev, msg])
+          // 最后一条推送完成后恢复自动滚动
+          if (i === all.length - 1) {
+            setTimeout(() => { isOnboardingRef.current = false }, 100)
+          }
+        }, i * 2000)
+      })
+    }
+  }, [])
 
   const handleNewConversation = () => {
     setShowConfirmModal(true)
@@ -489,6 +515,8 @@ export default function BusinessBreakdown() {
         id: report_id,
         project_name: formData.projectName || reportBody.share_card?.project_name || '未命名项目',
       })
+      // ✅ 首次拆解完成标记（老用户下次进入直接展示全部内容）
+      localStorage.setItem('wisescan_completed_first_scan', 'true')
 
       // 移除 loading 消息，添加报告卡片
       setMessages(prev => {
