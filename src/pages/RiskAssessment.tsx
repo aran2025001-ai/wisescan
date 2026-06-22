@@ -689,6 +689,7 @@ export default function RiskAssessment() {
   }
 
   // 前端直写 risk_reports（确保付费状态跨页面持久化）
+  // 先插新记录，再删旧记录，确保不丢数据
   const saveRiskReport = async (reportData: any) => {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -697,14 +698,28 @@ export default function RiskAssessment() {
       const supabase = createClient(supabaseUrl, supabaseKey)
       const addr = formData.contractAddress.trim()
       const { data: proj } = await supabase.from('projects').select('id').eq('contract_address', addr.toLowerCase()).maybeSingle()
-      await supabase.from('risk_reports').insert({
+      // 第1步：插入新记录
+      const { data: inserted, error: insErr } = await supabase.from('risk_reports').insert({
         user_address: (address || 'anonymous').toLowerCase(),
         project_id: proj?.id || null,
         report_data: reportData,
         total_score: reportData.total_score,
         risk_level: reportData.risk_level,
-      })
-      console.log('💾 risk_reports 已写入')
+      }).select('id')
+      if (insErr) {
+        console.warn('⚠️ risk_reports 写入失败:', insErr.message)
+        return
+      }
+      const newId = inserted?.[0]?.id
+      console.log('💾 risk_reports 写入成功, id:', newId)
+      // 第2步：删除该用户该项目的旧记录（排除新插入的）
+      if (newId && proj?.id) {
+        await supabase.from('risk_reports').delete()
+          .eq('project_id', proj.id)
+          .ilike('user_address', (address || 'anonymous').toLowerCase())
+          .neq('id', newId)
+        console.log('🧹 旧报告已清理')
+      }
     } catch (e: any) {
       console.warn('⚠️ risk_reports 写入失败:', e.message)
     }

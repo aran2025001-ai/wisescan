@@ -93,6 +93,9 @@ console.log('🔍 环境变量检查:', {
 const PORT = process.env.PORT || 3002;
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 
+// 防刷缓存（内存 Map，服务重启后重置）
+const antiSpamCache = new Map();
+
 // ===== System Prompt（明鉴·风险洞察官 v3 — 详细评分版）=====
 const SYSTEM_PROMPT = `你是「明鉴」平台的**明鉴·风险洞察官**，专门评估 Web3 加密项目的综合风险。你必须严格遵循以下原则：
 
@@ -432,18 +435,29 @@ async function storeRiskReport(address, user_address, reportData, referencedEvid
       const { data: proj } = await supabase.from('projects').select('id').eq('contract_address', address.toLowerCase()).maybeSingle();
       projectId = proj?.id || null;
     }
-    // 3. 写入 risk_reports
-    const { error: insErr } = await supabase.from('risk_reports').insert({
-      user_address: (user_address && typeof user_address === 'string') ? user_address.toLowerCase() : 'anonymous',
+    // 3. 写入 risk_reports（先插新记录，再删旧记录）
+    const userAddr = (user_address && typeof user_address === 'string') ? user_address.toLowerCase() : 'anonymous';
+    const { data: inserted, error: insErr } = await supabase.from('risk_reports').insert({
+      user_address: userAddr,
       project_id: projectId,
       report_data: reportData,
       total_score: reportData?.total_score || 0,
       risk_level: reportData?.risk_level || '未知',
       evidence_ids: referencedEvidenceIds.length > 0 ? referencedEvidenceIds : null,
-    });
+    }).select('id');
     if (insErr) throw insErr;
-    console.log(`💾 存库成功: address=${address?.slice(0,12)} project=${projectId?.slice(0,8) || 'N/A'} score=${reportData?.total_score}`);
-    // 4. 标记证据已引用（异步）
+    const newId = inserted?.[0]?.id;
+    console.log(`💾 存库成功: id=${newId?.slice(0,8)} address=${address?.slice(0,12)} project=${projectId?.slice(0,8) || 'N/A'} score=${reportData?.total_score}`);
+    // 4. 清理旧记录：该用户该项目的旧报告（排除新插入的）
+    if (newId && projectId) {
+      supabase.from('risk_reports').delete()
+        .eq('project_id', projectId)
+        .ilike('user_address', userAddr)
+        .neq('id', newId)
+        .then(() => console.log('🧹 旧报告已清理'))
+        .catch(() => {});
+    }
+    // 5. 标记证据已引用（异步）
     if (referencedEvidenceIds.length > 0) {
       supabase.from('evidence_submissions').update({ used_in_report: true }).in('id', referencedEvidenceIds).then();
     }
@@ -1366,6 +1380,22 @@ async function handleGenerateReport(req, res) {
   if (!project_name || !project_name.trim()) {
     return jsonRes(res, 400, { error: 'project_name is required' });
   }
+
+  // ── 后端支付校验（防匿名调用 + 防刷）───────
+  const callerAddr = user_address?.trim() || '';
+  if (!callerAddr) {
+    return jsonRes(res, 403, { error: 'user_address is required for payment validation' });
+  }
+
+  // 30秒防刷：同一用户 + 同一合约地址，禁止重复调用
+  const antiSpamKey = `report_spam_${callerAddr.toLowerCase()}_${(contract_address || '').toLowerCase()}`;
+  const lastCall = antiSpamCache.get(antiSpamKey);
+  const now = Date.now();
+  if (lastCall && (now - lastCall) < 30000) {
+    console.warn(`🚫 防刷拦截: ${callerAddr.slice(0,10)}... / ${(contract_address || '').slice(0,10)}... (间隔 ${((now - lastCall)/1000).toFixed(1)}s)`);
+    return jsonRes(res, 429, { error: '请勿频繁调用，30秒后再试' });
+  }
+  antiSpamCache.set(antiSpamKey, now);
 
   const projectName = project_name.trim();
   const address = contract_address?.trim() || '未提供';
@@ -3321,7 +3351,7 @@ async function handleChat(req, res) {
           .from('business_reports')
           .select('id')
           .eq('contract_address', contract_address.toLowerCase())
-          .eq('user_address', user_address.toLowerCase())
+          .ilike('user_address', user_address.toLowerCase())
           .maybeSingle();
         if (report) { isPaid = true; paidSource = '数据库'; }
         console.log(`[对话] DB付费状态: ${isPaid ? '已付费' : '免费'} | project=${project_name || contract_address}`);

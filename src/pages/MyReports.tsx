@@ -45,7 +45,7 @@ export default function MyReports() {
         `).order('created_at', { ascending: false })
 
         if (address) {
-          query = query.eq('user_address', address.toLowerCase())
+          query = query.ilike('user_address', address.toLowerCase())
         }
 
         const { data: rows } = await query.limit(100)
