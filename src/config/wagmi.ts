@@ -5,7 +5,6 @@ import {
   injectedWallet,
   okxWallet,
   coinbaseWallet,
-  walletConnectWallet,
   rabbyWallet,
   safepalWallet,
   bitgetWallet,
@@ -23,7 +22,6 @@ const connectors = connectorsForWallets(
         injectedWallet,
         okxWallet,
         coinbaseWallet,
-        walletConnectWallet,
       ],
     },
     {

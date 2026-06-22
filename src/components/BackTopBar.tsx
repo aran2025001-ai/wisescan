@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { LanguageSwitch } from './LanguageSwitch'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { useAccount } from 'wagmi'
 
 interface BackTopBarProps {
   title: string
@@ -9,7 +8,6 @@ interface BackTopBarProps {
 
 export function BackTopBar({ title }: BackTopBarProps) {
   const navigate = useNavigate()
-  const { isConnected } = useAccount()
 
   return (
     <header className="sticky top-0 z-40 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/80 backdrop-blur-md">
@@ -32,7 +30,6 @@ export function BackTopBar({ title }: BackTopBarProps) {
         <div className="flex items-center gap-1">
           <LanguageSwitch />
           <ConnectButton
-            key={String(isConnected)}
             showBalance={false}
             chainStatus="icon"
             accountStatus="avatar"
