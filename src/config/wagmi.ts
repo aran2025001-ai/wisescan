@@ -5,6 +5,7 @@ import {
   injectedWallet,
   okxWallet,
   coinbaseWallet,
+  walletConnectWallet,
   rabbyWallet,
   safepalWallet,
   bitgetWallet,
@@ -22,6 +23,7 @@ const connectors = connectorsForWallets(
         injectedWallet,
         okxWallet,
         coinbaseWallet,
+        walletConnectWallet,
       ],
     },
     {
@@ -38,7 +40,7 @@ const connectors = connectorsForWallets(
     },
   ],
   {
-    projectId: '7305da927ec9c79f9c85ce56d9e0592f',
+    projectId: '71e2c66ca016811b34cdcc6f245a28d9',
     appName: 'WiseScan',
   },
 )
