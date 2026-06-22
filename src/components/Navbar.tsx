@@ -1,8 +1,10 @@
 import { useTheme } from 'next-themes'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { useAccount } from 'wagmi'
 
 export function Navbar() {
   const { theme, setTheme } = useTheme()
+  const { isConnected } = useAccount()
 
   return (
     <nav className="sticky top-0 z-50 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))]/80 backdrop-blur-md">
@@ -38,6 +40,7 @@ export function Navbar() {
 
           {/* Wallet Connect */}
           <ConnectButton
+            key={String(isConnected)}
             showBalance={false}
             chainStatus="icon"
             accountStatus="avatar"
