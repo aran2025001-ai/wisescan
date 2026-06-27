@@ -460,7 +460,7 @@ async function storeRiskReport(address, user_address, reportData, referencedEvid
     const supabase = await getSupabase();
     // 1. upsert 项目
     if (address && address !== '未提供') {
-      const { data: proj } = await supabase.from('projects').select('id, assessment_count').eq('contract_address', address.toLowerCase()).maybeSingle();
+      const { data: proj } = await supabase.from('projects').select('id, assessment_count').ilike('contract_address', address.toLowerCase()).maybeSingle();
       if (proj) {
         await supabase.from('projects').update({
           assessment_count: (proj.assessment_count || 0) + 1,
@@ -479,7 +479,7 @@ async function storeRiskReport(address, user_address, reportData, referencedEvid
     // 2. 查 project_id
     let projectId = null;
     if (address && address !== '未提供') {
-      const { data: proj } = await supabase.from('projects').select('id').eq('contract_address', address.toLowerCase()).maybeSingle();
+      const { data: proj } = await supabase.from('projects').select('id').ilike('contract_address', address.toLowerCase()).maybeSingle();
       projectId = proj?.id || null;
     }
     // 3. 写入 risk_reports（先插新记录，再删旧记录）
@@ -2515,6 +2515,35 @@ ${dataStatusLines.join('\n')}${missingHint}${realtimeInfo ? `\n${realtimeInfo}\n
         console.log(`🚨 [自动修正] TOP10=${goplusTop10}%≥90%，历史维度 ${autoHistDim.score}/10 → 0/10（极度控盘=实质跑路信号）`);
         autoHistDim.score = 0;
         autoHistDim.deduction = (autoHistDim.deduction || '') + '；🚨 TOP10持仓占比≥' + goplusTop10 + '%，代币被少数地址绝对控制，判定为实质性跑路风险';
+      }
+    }
+
+    // 🚨 v5.20: 恶意特征/蜜罐检测 → 历史可靠性强制归零
+    // 检测到恶意特征（强制置换、强制锁仓等）或蜜罐时，项目已实质性跑路
+    const hasHoneypot = onChainData?.goplus?.isHoneypot === true;
+    if (maliciousFeatures.detected || hasHoneypot) {
+      const maliciousHistDim = reportData.six_dimensions?.find(d => d.dimension?.includes('历史'));
+      if (maliciousHistDim && maliciousHistDim.score > 0) {
+        const reason = maliciousFeatures.detected ? '恶意特征' : '蜜罐检测命中';
+        console.log(`🚨 [${reason}强制归零] 检测到${reason}，历史可靠性 ${maliciousHistDim.score}/10 → 0/10`);
+        maliciousHistDim.score = 0;
+        maliciousHistDim.deduction = (maliciousHistDim.deduction || '') + `；🚨 检测到${reason}，项目已实质性跑路/崩盘，历史可靠性强制归零`;
+        const _DIMS_NOW = {
+          '代码与技术安全': { maxScore: 25, weight: 0.25 },
+          '团队与运营透明度': { maxScore: 20, weight: 0.20 },
+          '经济模型与资金安全': { maxScore: 20, weight: 0.20 },
+          '社群与市场热度': { maxScore: 15, weight: 0.15 },
+          '历史与执行可靠性': { maxScore: 10, weight: 0.10 },
+          '合规性与法律风险': { maxScore: 10, weight: 0.10 },
+        };
+        let recalcTotal = 0;
+        for (const d of (reportData.six_dimensions || [])) {
+          const key = Object.keys(_DIMS_NOW).find(k => d.dimension?.includes(k));
+          if (key && d.score != null) {
+            recalcTotal += (d.score / _DIMS_NOW[key].maxScore) * _DIMS_NOW[key].weight * 100;
+          }
+        }
+        reportData.total_score = Math.min(100, Math.round(recalcTotal));
       }
     }
 

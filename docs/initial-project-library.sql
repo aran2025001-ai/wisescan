@@ -9,7 +9,12 @@
 --    - ✅ IEGT：BscScan 核实，代币名 IEGT，合约已验证
 --    - ✅ Pump.fun：Solscan 核实，Pump.fun 核心合约
 --    - ⚠️ 其他项目：暂无100%确认的合约地址，待补充
+-- 5. ⚠️ 合约地址已统一为小写（后端查询使用 .toLowerCase() 匹配）
 -- ============================================================
+
+-- 第0步：统一现有合约地址为小写（修复大小写不匹配问题）
+UPDATE projects SET contract_address = LOWER(contract_address) 
+WHERE contract_address IS NOT NULL AND contract_address != LOWER(contract_address);
 
 -- 第0步：检查是否已存在（避免重复录入）
 SELECT '=== 检查现有项目中是否有重复 ===' as info;
@@ -26,11 +31,11 @@ WHERE name IN (
 -- ============================================================
 
 -- IEGT
--- 合约地址：0x8D07f605926837Ea0F9E1e24DbA0Fb348cb3E97D
+-- 合约地址：0x8d07f605926837ea0f9e1e24dba0fb348cb3e97d（已转小写，兼容大小写敏感查询）
 -- BscScan 核实：代币名 IEGT (IEGT)，Max Supply 5,000,000
 -- 来源：慢雾披露的隐蔽Rug Pull
 INSERT INTO projects (name, contract_address, chain, info_completeness, assessment_count, created_at)
-SELECT 'IEGT', '0x8D07f605926837Ea0F9E1e24DbA0Fb348cb3E97D', 'bsc', 100, 0, now()
+SELECT 'IEGT', '0x8d07f605926837ea0f9e1e24dba0fb348cb3e97d', 'bsc', 100, 0, now()
 WHERE NOT EXISTS (SELECT 1 FROM projects WHERE name = 'IEGT');
 
 -- Pump.fun
