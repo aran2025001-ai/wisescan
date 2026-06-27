@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { analyzeImage, analyzeImageBase64 } from './utils/multimodal.mjs'
+import { analyzeImage, analyzeImageBase64 } from '../server-modules/utils/multimodal.mjs'
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions'
 

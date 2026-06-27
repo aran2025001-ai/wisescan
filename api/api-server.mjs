@@ -13,9 +13,9 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // NodeReal BSC 链上数据（代币信息、余额等）
-import { getTokenInfo, getContractStatus, formatSupply } from './utils/bsctrace.mjs';
-import { getTokenSecurity } from './utils/goplus.mjs';
-import { analyzeImage, analyzeImageBase64 } from './utils/multimodal.mjs';
+import { getTokenInfo, getContractStatus, formatSupply } from '../server-modules/utils/bsctrace.mjs';
+import { getTokenSecurity } from '../server-modules/utils/goplus.mjs';
+import { analyzeImage, analyzeImageBase64 } from '../server-modules/utils/multimodal.mjs';
 
 // 项目事实缓存（Project Ledger）— 两层缓存 + 事实只增不减
 import {
@@ -24,9 +24,9 @@ import {
   syncLocalCacheFromSupabase,
   extractFactsFromSearch, extractFactsFromUserNotes, injectFactsIntoPrompt,
   storeUserEvidence,
-} from './cache/project-ledger.mjs';
-import { searchWithFallback } from './utils/search-fallback.mjs';
-import { handleAdmin } from './admin.mjs';
+} from '../server-modules/cache/project-ledger.mjs';
+import { searchWithFallback } from '../server-modules/utils/search-fallback.mjs';
+import { handleAdmin } from '../server-modules/admin.mjs';
 
 // 加载 .env + .env.local（.env.local 覆盖 .env）
 function loadEnv() {
