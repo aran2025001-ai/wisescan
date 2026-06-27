@@ -183,7 +183,7 @@ function RiskReportCard({
     if (reportData?.integrityScore !== undefined) return reportData.integrityScore
     let s = 10
     if (projectName && projectName !== '未命名项目') s += 5
-    if (contractAddress && contractAddress !== '0x742d35Cc6634C0532925a3b844Bc454e4438f44e') s += 5
+    if (contractAddress && contractAddress !== '0x742d35Cc6634C0532925a3b844Bc454e4438f44e' && contractAddress !== '无合约地址') s += 5
     const _onChain = reportData?.onChainData
     const hasOnChain = !!_onChain?.tokenName && _onChain.tokenName !== '未知'
     if (hasOnChain) s += 20
@@ -232,6 +232,26 @@ function RiskReportCard({
         <h3 className="text-white font-semibold text-base">全景风险报告 - {projectName}</h3>
         <p className="text-zinc-400 text-xs mt-1">明鉴·风险洞察官出品</p>
       </div>
+
+      {/* 🚨 恶意特征警告横幅 */}
+      {(reportData as any)?.malicious_features?.detected && (
+        <div className="bg-red-900/30 border-b border-red-500/50 px-4 py-3">
+          <div className="flex items-start gap-2">
+            <span className="text-red-500 text-lg leading-none mt-0.5">🚨</span>
+            <div>
+              <div className="text-red-400 font-semibold text-xs">检测到恶意特征</div>
+              <div className="text-zinc-300 text-[11px] mt-0.5">
+                该项目存在以下恶意特征：{((reportData as any).malicious_features.features || []).join('、')}
+              </div>
+              {(reportData as any).malicious_features.evidence && (
+                <div className="text-zinc-500 text-[10px] mt-1 leading-relaxed">
+                  {(reportData as any).malicious_features.evidence}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 项目基本情报 — 复用 ProjectInfoCard */}
       <div className="px-4 py-3 border-b border-[#343438] bg-zinc-800/30">
@@ -605,7 +625,8 @@ export default function RiskAssessment() {
   }, [])
 
   const handleCopyAddress = useCallback(async () => {
-    const addr = formData.contractAddress.trim() || "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"
+    const addr = noContractMode ? "无合约地址" : (formData.contractAddress.trim() || "")
+    if (!addr || addr === "无合约地址") return
     const ok = await copyToClipboard(addr)
     if (ok) {
       setCopied(true)
@@ -754,6 +775,10 @@ export default function RiskAssessment() {
     }
   }
 
+  const [showCouponModal, setShowCouponModal] = useState(false)
+  const [couponAmount, setCouponAmount] = useState(0)
+  const [pendingUnlockProjectName, setPendingUnlockProjectName] = useState('') // 暂存待解锁的项目名
+
   const handleReportUnlock = async (projectName: string) => {
     // 已经生成过报告卡片 → 直接滚动
     if (hasRiskReportRef.current && riskReportCardIdRef.current) {
@@ -764,7 +789,43 @@ export default function RiskAssessment() {
     if (isGeneratingReport || hasRiskReportRef.current) {
       return
     }
-    // 立即标记为已付费，防止用户在报告生成期间重复点击时再次弹出支付框
+
+    // 先查用户有没有代金券
+    try {
+      const coupRes = await fetch(`/api/coupons/list?user_address=${address}`, {
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const coupData = await coupRes.json()
+      const activeCoupons = (coupData.coupons || []).filter((c: any) => c.status === 'active')
+      if (activeCoupons.length > 0) {
+        // 有代金券 → 显示抵扣提示弹窗
+        setCouponAmount(parseFloat(activeCoupons[0].amount) || 2.99)
+        setPendingUnlockProjectName(projectName)
+        setShowCouponModal(true)
+        return // 等用户确认后再继续
+      }
+    } catch { /* 查询失败直接走默认解锁 */ }
+
+    // 无代金券 → 直接解锁
+    doGenerateReport(projectName)
+  }
+
+  // 用户确认弹窗后执行真正的解锁
+  const doGenerateReport = async (projectName: string) => {
+    // 消耗代金券
+    try {
+      const coupRes = await fetch('/api/coupons/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_address: address }),
+      })
+      const coupData = await coupRes.json()
+      if (coupData.success && coupData.used > 0) {
+        console.log(`💳 消耗代金券 ${coupData.amount} USDT (${coupData.used} 张)`)
+      }
+    } catch { /* 代金券消耗失败不影响报告生成 */ }
+
+    // 立即标记为已付费
     setIsReportPaid(true)
     setIsGeneratingReport(true)
     hasRiskReportRef.current = true
@@ -893,7 +954,7 @@ export default function RiskAssessment() {
       messageType: "card",
       cardData: fetchedData || undefined,
       cardProjectName: displayPName,
-      cardContractAddress: addr || "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+      cardContractAddress: addr || "无合约地址",
       timestamp: new Date(),
     }
     pendingCardScrollRef.current = true
@@ -903,7 +964,7 @@ export default function RiskAssessment() {
     // 更新全网项目库（双写：localStorage + Supabase API）
     upsertProject({
       name: pName,
-      contractAddress: addr || "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+      contractAddress: addr || undefined,
       hasReport: true,
     })
     // 同步 Supabase 项目计数
@@ -1052,8 +1113,41 @@ export default function RiskAssessment() {
     setShowAlertModal(false)
     setAlertShowResetBtn(false)
 
+    // 🆕 自动搜索合约地址（静默）：没填地址 + 有项目名 + 未激活无地址模式
+    // 搜到了自动填入，搜不到不做任何事（留给用户自己填或选无地址模式）
+    let autoResolvedAddr = ''
+    if (!formData.contractAddress.trim() && formData.projectName.trim() && !noContractMode) {
+      console.log(`🔍 自动搜索合约地址: "${formData.projectName.trim()}"`)
+      try {
+        const searchRes = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(formData.projectName.trim())}`, { signal: AbortSignal.timeout(4000) })
+        if (searchRes.ok) {
+          const searchData = await searchRes.json()
+          const pairs = searchData.pairs || []
+          const nameLower = formData.projectName.trim().toLowerCase()
+          const matched = pairs.find((p: any) =>
+            p.baseToken?.address &&
+            /^0x[0-9a-fA-F]{40}$/.test(p.baseToken.address) &&
+            (p.baseToken.name?.toLowerCase() === nameLower || p.baseToken.symbol?.toLowerCase() === nameLower)
+          ) || pairs.find((p: any) =>
+            p.baseToken?.address && /^0x[0-9a-fA-F]{40}$/.test(p.baseToken.address)
+          )
+          if (matched) {
+            autoResolvedAddr = matched.baseToken.address
+            setFormData(prev => ({ ...prev, contractAddress: autoResolvedAddr }))
+            console.log(`✅ 自动搜索到合约地址: ${autoResolvedAddr} (${matched.baseToken.name} / ${matched.baseToken.symbol})`)
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ 自动搜索合约地址失败:', (e as Error)?.message || e)
+      }
+      // 🔔 没搜到 → 不自动激活无地址模式，让用户自己决定
+      if (!autoResolvedAddr) {
+        console.log('📌 未搜到合约地址，留给用户自行填写或选择无地址模式')
+      }
+    }
+
     // 表单校验：合约地址未填且非无地址模式
-    if (!formData.contractAddress.trim() && !noContractMode) {
+    if (!(autoResolvedAddr || formData.contractAddress.trim()) && !noContractMode) {
       setAlertMsg('⚠️ 请填写合约地址\n\n请填写合约地址，或使用"没有合约地址"功能进入无地址模式。')
       setShowAlertModal(true)
       setIsGeneratingReport(false)
@@ -1067,8 +1161,9 @@ export default function RiskAssessment() {
     setIsGeneratingReport(true)
 
     // ===== 合约地址格式校验 =====
-    if (!noContractMode && formData.contractAddress.trim()) {
-      const addr = formData.contractAddress.trim()
+    const scanAddr = autoResolvedAddr || formData.contractAddress.trim()
+    if (!noContractMode && scanAddr) {
+      const addr = scanAddr
       if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) {
         setAlertMsg(
           '合约地址格式错误！\n\n' +
@@ -1144,8 +1239,8 @@ export default function RiskAssessment() {
     let projectLastEvaluation = '--'
 
     // 保存到全网项目库（每次查询都存档，去重+更新计数）
-    if (formData.contractAddress.trim()) {
-      const addr = formData.contractAddress.trim()
+    if (scanAddr) {
+      const addr = scanAddr
       // 根据地址格式猜测链类型
       const guessChain = (a: string) => {
         if (/^T[A-Za-z1-9]{33}$/.test(a)) return 'TRON'
@@ -1178,33 +1273,49 @@ export default function RiskAssessment() {
 
     // 🔗 快速验证合约地址（< 3 秒，并行 RPC，不调 DeepSeek）
     //    验证失败 → 立即弹窗；验证通过 → 立即生成卡片，背景调 DeepSeek
-    const verifyBody = {
-      project_name: projectName,
-      contract_address: formData.contractAddress.trim() || undefined,
-      quick_verify: true,  // 🚀 快速模式：只验证合约，不调 AI
-    }
-    console.log('[WiseScan] 开始快速验证', verifyBody)
-
     let verifyPassed = false
-    try {
-      const verifyRes = await fetch('/api/generate-risk-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(verifyBody),
-      })
-      console.log('[WiseScan] 验证响应 status:', verifyRes.status)
 
-      if (verifyRes.ok) {
-        const verifyJson = await verifyRes.json()
-        console.log('[WiseScan] 验证响应数据:', verifyJson)
-        if (verifyJson.verified) {
-          // 合约地址链上验证通过 → 立即生成卡片（快！）
-          verifyPassed = true
+    if (noContractMode) {
+      // 🆕 无地址模式：跳过链上验证，直接走完整报告生成
+      console.log('[WiseScan] 无地址模式，跳过合约验证')
+      verifyPassed = true
+    } else {
+      const verifyBody = {
+        project_name: projectName,
+        contract_address: scanAddr || undefined,
+        quick_verify: true,
+        user_address: address || undefined,
+      }
+      console.log('[WiseScan] 开始快速验证', verifyBody)
+
+      try {
+        const verifyRes = await fetch('/api/generate-risk-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(verifyBody),
+        })
+        console.log('[WiseScan] 验证响应 status:', verifyRes.status)
+
+        if (verifyRes.ok) {
+          const verifyJson = await verifyRes.json()
+          console.log('[WiseScan] 验证响应数据:', verifyJson)
+          if (verifyJson.verified) {
+            verifyPassed = true
+          } else {
+            const apiError = verifyJson.error || '合约地址无法匹配到有效项目数据'
+            setAlertMsg(
+              `❌ ${apiError}\n\n` +
+              "可能的原因：\n" +
+              "• 合约地址输入有误（请逐位核对）\n" +
+              "• 该地址是 EOA 钱包地址而非合约地址\n" +
+              "• 合约尚未部署或已被销毁\n\n" +
+              "请检查后重新输入。"
+            )
+          }
         } else {
-          // 合约地址不存在 / 不是合约
-          const apiError = verifyJson.error || '合约地址无法匹配到有效项目数据'
           setAlertMsg(
-            `❌ ${apiError}\n\n` +
+            "❌ 无法匹配到有效项目数据\n\n" +
+            "该合约地址或项目名称无法在链上数据库中找到对应项目。\n\n" +
             "可能的原因：\n" +
             "• 合约地址输入有误（请逐位核对）\n" +
             "• 该地址是 EOA 钱包地址而非合约地址\n" +
@@ -1212,27 +1323,15 @@ export default function RiskAssessment() {
             "请检查后重新输入。"
           )
         }
-      } else {
-        // HTTP 4xx/5xx
+      } catch {
         setAlertMsg(
-          "❌ 无法匹配到有效项目数据\n\n" +
-          "该合约地址或项目名称无法在链上数据库中找到对应项目。\n\n" +
-          "可能的原因：\n" +
-          "• 合约地址输入有误（请逐位核对）\n" +
-          "• 该地址是 EOA 钱包地址而非合约地址\n" +
-          "• 合约尚未部署或已被销毁\n\n" +
-          "请检查后重新输入。"
+          "❌ API 服务连接失败\n\n" +
+          "本地 API 服务（端口 3002）未启动或已崩溃。\n\n" +
+          "请在项目目录的 PowerShell 中运行：\n" +
+          "  .\\start.ps1\n\n" +
+          "启动后再试。"
         )
       }
-    } catch {
-      // 网络异常或 API 不可达
-      setAlertMsg(
-        "❌ API 服务连接失败\n\n" +
-        "本地 API 服务（端口 3002）未启动或已崩溃。\n\n" +
-        "请在项目目录的 PowerShell 中运行：\n" +
-        "  .\\start.ps1\n\n" +
-        "启动后再试。"
-      )
     }
 
     if (!verifyPassed) {
@@ -1258,8 +1357,9 @@ export default function RiskAssessment() {
       // 🔧 handleFreeScan 内部 buildRequestBody（不能引用 handleReportUnlock 内部的版本）
       const freeBody = {
         project_name: projectName,
-        contract_address: formData.contractAddress.trim() || undefined,
+        contract_address: scanAddr || undefined,
         user_notes: formData.remarks?.trim() || undefined,
+        user_address: address || undefined,
       }
       const fullRes = await fetch('/api/generate-risk-report', {
         method: 'POST',
@@ -1298,7 +1398,7 @@ export default function RiskAssessment() {
       <ErrorBoundary>
         <ProjectInfoCard
           projectName={displayName}
-          contractAddress={formData.contractAddress.trim() || "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"}
+          contractAddress={scanAddr || (noContractMode ? "无合约地址" : "")}
           reportData={cardStateRef.current.reportData}
           onChainData={cardStateRef.current.reportData?.onChainData}
           onCopyAddress={handleCopyAddress}
@@ -1634,7 +1734,7 @@ export default function RiskAssessment() {
                 }}>
                   <RiskReportCard
                     projectName={message.cardProjectName || "未命名项目"}
-                    contractAddress={message.cardContractAddress || formData.contractAddress.trim() || "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"}
+                    contractAddress={message.cardContractAddress || formData.contractAddress.trim() || (noContractMode ? "无合约地址" : "")}
                     onCopyAddress={handleCopyAddress}
                     onAnalyzeBusinessModel={() => setShowAnalyzeModal(true)}
                     reportData={cardStateRef.current.reportData || message.cardData}
@@ -1955,6 +2055,37 @@ export default function RiskAssessment() {
                 以上选择都不对
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 代金券抵扣提示弹窗 */}
+      {showCouponModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]" onClick={() => setShowCouponModal(false)}>
+          <div className="bg-zinc-900 rounded-2xl p-5 w-80 mx-4 space-y-4 border border-[#343438]" onClick={(e) => e.stopPropagation()}>
+            <p className="text-zinc-200 text-sm font-bold text-center leading-relaxed">
+              🎟️ 检测到代金券
+            </p>
+            <p className="text-zinc-400 text-xs leading-relaxed text-center">
+              您有 <span className="text-blue-400 font-semibold">{couponAmount} USDT</span> 代金券，本次项目安全评估（2.99 USDT）将<b>全额抵扣</b>。
+            </p>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setShowCouponModal(false)}
+                className="flex-1 py-1.5 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-xs"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  setShowCouponModal(false)
+                  doGenerateReport(pendingUnlockProjectName)
+                }}
+                className="flex-1 py-1.5 px-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs"
+              >
+                使用代金券抵扣
+              </button>
+            </div>
           </div>
         </div>
       )}

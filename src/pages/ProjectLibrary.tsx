@@ -395,37 +395,6 @@ export default function ProjectLibrary() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
                           <h3 className="font-semibold text-xs truncate">{project.name}</h3>
-                          {/* 曾用名提示 */}
-                          {project.previousNames && project.previousNames.length > 0 && (
-                            <div className="relative">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setShowInfoPopover(showInfoPopover === `prev_${project.id}` ? null : `prev_${project.id}`)
-                                }}
-                                className="text-zinc-500 hover:text-zinc-300 transition-colors"
-                                title="查看曾用名"
-                              >
-                                <Info className="h-3 w-3" />
-                              </button>
-                              {showInfoPopover === `prev_${project.id}` && (
-                                <>
-                                  <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setShowInfoPopover(null) }} />
-                                  <div className="absolute top-full left-0 mt-1 z-50 bg-zinc-800 border border-[#343438] rounded-lg p-2.5 w-48 shadow-lg">
-                                    <p className="text-zinc-400 text-xs mb-1.5 font-medium">曾用名：</p>
-                                    {project.previousNames.map((item: any, idx: number) => (
-                                      <div key={idx} className="text-xs text-zinc-300 py-0.5">
-                                        <span className="text-zinc-400">{item.name}</span>
-                                        <span className="text-zinc-500 text-[10px] ml-1">
-                                          ({new Date(item.updated_at).toISOString().slice(0, 10)})
-                                        </span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          )}
                         </div>
                         <p className="text-xs text-zinc-400 truncate mt-0.5">{maskAddress(project.contractAddress)}</p>
                       </div>

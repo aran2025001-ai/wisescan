@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAccount, useDisconnect } from 'wagmi'
 import {
@@ -25,6 +25,19 @@ export default function Profile() {
   const { address } = useAccount()
   const { disconnect } = useDisconnect()
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
+  const [userCount, setUserCount] = useState('500')
+
+  // 获取后台配置的用户展示数字
+  useEffect(() => {
+    fetch('/api/site-config?key=display_user_count')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.data?.display_user_count) {
+          setUserCount(data.data.display_user_count)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const maskAddress = (addr: string): string => {
     if (!addr || addr.length < 10) return addr || ''
@@ -165,7 +178,7 @@ export default function Profile() {
       <div className="text-center pb-12">
         <div className="text-sm font-bold text-blue-400 mb-1">怕被割？先明鉴！</div>
         <div className="text-xs text-zinc-500">
-          已有<span className="font-semibold text-zinc-400">500+</span>位用户使用明鉴进行项目评估
+          已有<span className="font-semibold text-zinc-400">{userCount}+</span>位用户使用明鉴进行项目评估
         </div>
       </div>
 

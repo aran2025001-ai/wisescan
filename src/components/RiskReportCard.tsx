@@ -63,6 +63,11 @@ interface ReportData {
     evidence_source?: string
   } | string
   ai_summary?: string
+  malicious_features?: {
+    detected: boolean
+    features: string[]
+    evidence: string | null
+  }
   onChainData?: {
     tokenName: string
     tokenSymbol: string
@@ -174,7 +179,7 @@ export default function RiskReportCard({
   const infoCompleteness = (() => {
     let s = 10
     if (projectName && projectName !== '未命名项目') s += 5
-    if (contractAddress && contractAddress !== '0x742d35Cc6634C0532925a3b844Bc454e4438f44e') s += 5
+    if (contractAddress && contractAddress !== '0x742d35Cc6634C0532925a3b844Bc454e4438f44e' && contractAddress !== '无合约地址') s += 5
     const hasOnChain = !!effectiveOnChain?.tokenName && effectiveOnChain.tokenName !== '未知'
     if (hasOnChain) s += 20
     if (reportData?.total_score !== undefined && reportData.total_score > 0) s += 20
@@ -307,6 +312,26 @@ export default function RiskReportCard({
           </div>
         </div>
       </div>
+
+      {/* 🚨 恶意特征警告横幅 */}
+      {reportData?.malicious_features?.detected && (
+        <div className="bg-red-900/30 border-t border-red-500/50 px-4 py-3">
+          <div className="flex items-start gap-2">
+            <span className="text-red-500 text-lg leading-none mt-0.5">🚨</span>
+            <div>
+              <div className="text-red-400 font-semibold text-xs">检测到恶意特征</div>
+              <div className="text-zinc-300 text-[11px] mt-0.5">
+                该项目存在以下恶意特征：{reportData.malicious_features.features.join('、')}
+              </div>
+              {reportData.malicious_features.evidence && (
+                <div className="text-zinc-500 text-[10px] mt-1 leading-relaxed">
+                  {reportData.malicious_features.evidence}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI 综合解读 */}
       <div className="px-4 py-3 border-t border-[#343438] bg-zinc-800/30">

@@ -1,20 +1,42 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, Mail } from 'lucide-react'
+import { useAccount } from 'wagmi'
 
 export default function Feedback() {
   const navigate = useNavigate()
+  const { address } = useAccount()
   const [feedbackText, setFeedbackText] = useState('')
   const [showToast, setShowToast] = useState(false)
+  const [toastMsg, setToastMsg] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  const handleSubmit = () => {
-    if (!feedbackText.trim()) return
-    setShowToast(true)
-    setTimeout(() => {
-      setShowToast(false)
-      setFeedbackText('')
-      navigate('/profile')
-    }, 2000)
+  const handleSubmit = async () => {
+    if (!feedbackText.trim() || submitting) return
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: feedbackText.trim(), user_address: address || null }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setToastMsg('感谢您的反馈！我们会认真考虑。')
+      } else {
+        setToastMsg('提交失败，请稍后重试')
+      }
+    } catch {
+      setToastMsg('网络错误，请稍后重试')
+    } finally {
+      setSubmitting(false)
+      setShowToast(true)
+      setTimeout(() => {
+        setShowToast(false)
+        setFeedbackText('')
+        navigate('/profile')
+      }, 2000)
+    }
   }
 
   return (
@@ -60,10 +82,10 @@ export default function Feedback() {
           {/* 提交按钮 */}
           <button
             onClick={handleSubmit}
-            disabled={!feedbackText.trim()}
+            disabled={!feedbackText.trim() || submitting}
             className="w-full py-2.5 bg-blue-500 rounded-full text-white text-sm font-semibold hover:bg-blue-600 active:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            提交
+            {submitting ? '提交中...' : '提交'}
           </button>
         </div>
       </div>
@@ -77,7 +99,7 @@ export default function Feedback() {
       {showToast && (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
           <div className="bg-zinc-900 border border-[#343438] rounded-lg px-6 py-4 shadow-xl pointer-events-auto">
-            <p className="text-white text-sm">感谢您的反馈！我们会认真考虑。</p>
+            <p className="text-white text-sm">{toastMsg}</p>
           </div>
         </div>
       )}

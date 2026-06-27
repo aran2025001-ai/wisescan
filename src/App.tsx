@@ -25,6 +25,17 @@ const Feedback = lazy(() => import('./pages/Feedback'))
 const InviteLanding = lazy(() => import('./pages/InviteLanding'))
 const ShareCardPreview = lazy(() => import('./pages/ShareCardPreview'))
 
+// 管理后台
+const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'))
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
+const AdminWithdrawals = lazy(() => import('./pages/admin/AdminWithdrawals'))
+const AdminEvidences = lazy(() => import('./pages/admin/AdminEvidences'))
+const AdminProjects = lazy(() => import('./pages/admin/AdminProjects'))
+const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'))
+const AdminUserDetail = lazy(() => import('./pages/admin/AdminUserDetail'))
+const AdminFeedback = lazy(() => import('./pages/admin/AdminFeedback'))
+const AdminSiteConfig = lazy(() => import('./pages/admin/AdminSiteConfig'))
+
 function LazyFallback() {
   return (
     <div className="min-h-screen bg-[#050505] flex items-center justify-center">
@@ -97,6 +108,17 @@ export default function App() {
                 <Route path="/profile/withdrawal" element={<WithdrawalHistory />} />
                 <Route path="/invite" element={<InviteLanding />} />
                 <Route path="/preview/share-card" element={<ShareCardPreview />} />
+                {/* 管理后台 */}
+                <Route path="/admin/login" element={<AdminLogin />} />
+                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                <Route path="/admin/withdrawals" element={<AdminWithdrawals />} />
+                <Route path="/admin/evidences" element={<AdminEvidences />} />
+                <Route path="/admin/projects" element={<AdminProjects />} />
+                <Route path="/admin/users" element={<AdminUsers />} />
+                <Route path="/admin/users/:address" element={<AdminUserDetail />} />
+                <Route path="/admin/feedback" element={<AdminFeedback />} />
+                <Route path="/admin/site-config" element={<AdminSiteConfig />} />
+                <Route path="/admin" element={<AdminLogin />} />
               </Routes>
             </Suspense>
           </ErrorBoundary>

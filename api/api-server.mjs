@@ -25,6 +25,8 @@ import {
   extractFactsFromSearch, extractFactsFromUserNotes, injectFactsIntoPrompt,
   storeUserEvidence,
 } from './cache/project-ledger.mjs';
+import { searchWithFallback } from './utils/search-fallback.mjs';
+import { handleAdmin } from './admin.mjs';
 
 // 加载 .env + .env.local（.env.local 覆盖 .env）
 function loadEnv() {
@@ -136,6 +138,7 @@ const SYSTEM_PROMPT = `你是「明鉴」平台的**明鉴·风险洞察官**，
 - **未验证标识**：未经 ≥3 人交叉验证的用户信息，评分时标注"用户反馈，待验证"，可适度参考但不应作为主要评分依据
 - **已验证信息**：经 ≥3 名独立用户交叉验证通过的证据，系统会在「## 社区已验证证据」段落中单独列出，届时必须严格执行（标注"【社区已验证】"前缀）
 - **防止滥用**：单一用户的举报不应导致评分剧烈变化，避免项目方恶意攻击竞争对手
+- **⚠️ 单条待验证证据不触发恶意特征**：标注"【用户提供，待核实】"的证据仅用于参考，不得作为恶意特征检测（malicious_features）的判定依据。恶意特征判定必须依赖多源交叉验证（见恶意特征检测指令）。
 
 ### 社区已验证证据处理规则（强制生效）
 当提示中包含「## 【用户/社区补充信息】」段落时，证据按验证状态分为三档，你必须严格遵守以下标注规范：
@@ -173,6 +176,40 @@ const SYSTEM_PROMPT = `你是「明鉴」平台的**明鉴·风险洞察官**，
 - 对于数据缺失的维度，按"无证据默认保守评分"原则处理（如无链上数据时代码安全维度给 5-10 分基础分）
 - 在 deduction 字段中标注"数据缺失：未获取到XXX信息"
 - **不得输出"可能"、"似乎"、"也许"等模糊词**，即使数据缺失也使用"未检测到"、"无公开信息"等明确表述
+
+---
+### 恶意特征检测指令（新增 — 最高优先级）
+在分析项目时，你必须主动从用户贡献、网络搜索、链上数据中检测以下恶意特征。**此检测用于区分"技术升级"和"恶意变更"，是崩盘判定的核心依据。**
+
+**恶意特征清单（检测到任意 1 条即标记）：**
+| # | 恶意特征 | 关键词/描述 | 数据来源 |
+|---|----------|-------------|----------|
+| 1 | 强制锁仓 | "锁仓"、"资金被锁"、"无法提现"、"提现关闭" | 用户贡献 / 舆情 |
+| 2 | 强制置换 | "强制兑换"、"置换股票"、"换成新币"、"换仓"、"兑换成" | 用户贡献 / 舆情 |
+| 3 | 提现门槛跳涨 | "提现门槛"、"最低提现"、"提现要求"、"突然提高" | 用户贡献 / 舆情 |
+| 4 | 规则单方面修改 | "单方面修改"、"规则变更"、"不通知"、"临时改" | 用户贡献 / 舆情 |
+| 5 | 官方社群解散 | "社群解散"、"群被封"、"禁言"、"官方跑路" | 用户贡献 / 舆情 |
+| 6 | 中心化操控 | "项目方操控"、"价格操控"、"强制终止" | 用户贡献 / 舆情 / 链上数据 |
+
+**检测规则：**
+- **多源交叉验证原则**：必须有 ≥2 个独立来源同时指向同一恶意特征，才可标记为 malicious_features.detected = true
+- 可接受的独立来源包括：网络搜索命中（≥1篇）、已验证证据（≥3人，标注【社区验证】）、部分验证证据（1-2人，标注【用户反映】）
+- **以下情况可以判定：**
+  - 网络搜索 ≥2 篇独立文章命中相同特征 → ✅ 直接判定
+  - 网络搜索 1 篇 + 至少 1 条已验证/部分验证证据 → ✅ 判定
+  - 网络搜索 0 篇 + ≥3 条相同特征的待验证证据（标注【用户提供，待核实】）→ ✅ 判定（多条独立用户反映）
+  - 已验证证据（≥3人验证）直接命中 → ✅ 判定
+- **以下情况不应判定：**
+  - 仅 1 条待验证证据（0人验证，标注【用户提供，待核实】）→ ❌ 不判定（单一用户提交不足为证）
+  - 技术升级（如 ETH POW→POS、Uniswap V2→V3、品牌更名）→ ❌ 不属于恶意特征
+- 主流公链/知名协议的技术迭代，应标记为"正常升级"
+- 未检测到 → malicious_features.detected = false
+
+**评分影响：**
+- **检测到恶意特征 + 模式变更 ≥3 次 → 触发崩盘判定**（历史可靠性归零，综合评分 ≤ 30，极高风险）
+- **检测到恶意特征 + 模式变更 < 3 次 → 触发崩盘判定**（只要出现强制锁仓/强制置换等行为即判定为跑路）
+- **模式变更 ≥3 次但未检测到恶意特征 → 标记"高风险，需关注"**（历史可靠性给 2 分，不自动判崩盘）
+- **模式变更 < 3 次且无恶意特征 → 正常评分流程**
 
 ---
 ### 六大维度详细评分标准（满分 100 分）
@@ -274,13 +311,15 @@ const SYSTEM_PROMPT = `你是「明鉴」平台的**明鉴·风险洞察官**，
 
 | 事件 | 扣分 | 说明 |
 |------|------|------|
-| 模式变更 1 次 | -5 | |
-| 模式变更 2 次 | -10（本维度归零） | |
-| 模式变更 ≥3 次 | -10（归零）+ 触发"极高风险"强制映射 | 变来变去的项目（如矿机→股票→达尔文），多次变更意味着项目方缺乏稳定方向，对投资者极度不利 |
+| 模式变更 1 次（无恶意特征） | -5 | |
+| 模式变更 2 次（无恶意特征） | -10（本维度归零） | |
+| 模式变更 ≥3 次（无恶意特征） | -8（给 2 分，不归零）+ 标记"高风险，需关注" | 变更多次但不含恶意特征（如技术迭代），不自动判崩盘 |
+| 模式变更 ≥3 次 + 含恶意特征 | 归零（0 分）+ 触发崩盘判定 ≤30 分 | 检测到强制锁仓/强制置换等恶意行为 |
+| 模式变更 < 3 次 + 含恶意特征 | 归零（0 分）+ 触发崩盘判定 ≤30 分 | 即使只变更 1 次，出现恶意特征即判定跑路 |
 | 用户资金被锁定（经 3 人验证） | 归零（0 分） | |
-| **项目已确认崩盘/跑路** | **归零（0 分）** | 满足任一：①搜索/用户验证明确显示"已崩盘""团队跑路""币价归零且项目方失联"；②≥3名用户独立反映"提现已超7天未处理"或"官方社群已解散"；③链上数据TOP10持仓≥90%且项目成立超6个月无任何有效更新 |
-| **项目曾有崩盘/跑路传闻** | **-5 分** | 满足任一：①搜索/用户验证显示"曾有崩盘/跑路传闻"但未确认；②项目方曾单方面停止核心业务（如矿机挖矿终止、质押池关闭）但未全额返还用户资产 |
-| | | ⚠️ 崩盘/跑路检测优先级高于模式变更：只要崩盘条件命中，即使模式变更<2次也归零 |
+| **项目已确认崩盘/跑路** | **归零（0 分）** | 满足任一：①结合恶意特征检测 + 模式变更判定；②搜索/用户验证明确显示"已崩盘""团队跑路""币价归零且项目方失联"；③≥3名用户独立反映"提现已超7天未处理"或"官方社群已解散"；④链上数据TOP10持仓≥90%且项目成立超6个月无任何有效更新 |
+| **项目曾有崩盘/跑路传闻（未确认）** | **-5 分** | 满足任一：①搜索/用户验证显示"曾有崩盘/跑路传闻"但未确认；②项目方曾单方面停止核心业务（如矿机挖矿终止、质押池关闭）但未全额返还用户资产 |
+| | | ⚠️ 恶意特征检测优先级最高：只要检测到恶意特征，即使模式变更 < 3 次也触发崩盘判定 |
 | **模式变更计数规则** | | 不同原因的变更各算 1 次。例如：矿机→社交 算 1 次，更名品牌升级 算另 1 次。搜索结果 + 社区验证合并计算（去重：相同描述合并，不同原因累加）。|
 
 ---
@@ -296,17 +335,20 @@ const SYSTEM_PROMPT = `你是「明鉴」平台的**明鉴·风险洞察官**，
 ---
 
 ### 特殊风险信号（需在报告醒目位置标注）
-- 项目方多次变更模式（≥3 次）→ 自动归零"历史可靠性"维度，**触发"极高风险"强制映射**。
-- 项目方变更模式 2 次 → 历史可靠性归零，上升整体风险等级一级。
+- **检测到恶意特征** → 在报告顶部标注红色警告横幅："🚨 检测到恶意特征：强制锁仓、强制置换等"，历史可靠性归零，综合评分 ≤ 30。
+- 项目方多次变更模式（≥3 次）且**未检测到恶意特征** → 历史可靠性给 2 分，不归零，标记"高风险，需关注"。
+- 项目方变更模式 2 次（无恶意特征） → 历史可靠性归零，上升整体风险等级一级。
 - 用户贡献证据（≥3 人交叉验证）显示"提现困难"、"资金被锁" → 在舆情板块优先展示，并标注"社区联合举报"。
 - 项目方未提供合约地址 → 链上维度标记"无数据"，风险等级上调一级。
-- **项目已确认崩盘/跑路** → 历史可靠性归零 + 综合解读必须标注："▲ 该项目已确认崩盘/跑路，资金存在永久性损失风险。"
+- **项目已确认崩盘/跑路（含恶意特征判定）** → 历史可靠性归零 + 综合解读必须标注："▲ 该项目已确认崩盘/跑路，资金存在永久性损失风险。"
 - **项目曾有崩盘/跑路传闻（未确认）** → 历史可靠性 -5 + 综合解读必须标注："⚠️ 该项目曾有重大模式变更或崩盘传闻，请谨慎。"
 - **评分一致性约束**：如果历史与执行可靠性得分 ≤5 分，综合评分总分额外扣除 10 分（在六维加权基础上再扣），体现"该项目存在重大历史信用问题"。
 
 ### 综合解读崩盘标注规范
+- **检测到恶意特征**：▲ 该项目已确认崩盘/跑路（检测到恶意特征：XXX），资金存在永久性损失风险。
 - 历史可靠性归零时（崩盘/跑路确认）：▲ 该项目已确认崩盘/跑路，资金存在永久性损失风险。
 - 历史可靠性扣 5 分时（传闻未确认）：⚠️ 该项目曾有崩盘传闻或重大模式变更，请谨慎。
+- 模式变更 ≥3 次但无恶意特征：⚠️ 该项目模式变更频繁（≥3次），但未发现强制锁仓、强制置换等恶意特征，建议密切关注项目动态。
 - 无论哪种情况，综合解读必须包含该标注，不可遗漏。
 
 ### 输出格式（必须返回严格的结构化 JSON，每个维度必须包含 max 字段）
@@ -327,6 +369,11 @@ const SYSTEM_PROMPT = `你是「明鉴」平台的**明鉴·风险洞察官**，
   "top10_concentration": "极高|偏高|正常",
   "funding_record": "有|无",
   "history_mode_changes": "无|1次|≥2次",
+  "malicious_features": {
+    "detected": true/false,
+    "features": ["强制锁仓", "强制置换"],
+    "evidence": "用户提交的截图显示：项目方于2025年12月强制终止矿机挖矿，用户资金被锁定无法提现"
+  },
   "public_opinion": {
     "summary": "舆情摘要（2-3 句话）",
     "negative_keywords": ["关键词1", "关键词2"],
@@ -1016,207 +1063,62 @@ async function resolveProjectName(contractAddress, userProvidedName, tokenName, 
  * 搜索质量第一，速度其次；4s批次超时，8s总超时；basic 深度对中文项目效果最佳
  */
 async function fetchRealtimeInfo(projectName, contractAddress = null, skipCategories = new Set(), fundingIsKnown = false) {
-  const apiKey = process.env.TAVILY_API_KEY;
-  if (!apiKey) {
-    console.log('🔍 [Tavily] 未配置 TAVILY_API_KEY，跳过实时搜索');
-    return { text: '', flags: { hasAudit: false, hasFunding: false, hasLicense: false, hasLegalEntity: false, hasModeChange: false, modeChangeCount: 0, hasNegativeSentiment: false } };
-  }
-
   const startTime = Date.now();
   const BATCH_TIMEOUT = 4000;  // 单批次超时 4s
   const TOTAL_TIMEOUT = 8000;  // 总超时 8s
-  let totalCreditsUsed = 0;
 
-  // ========== Gap 驱动动态查询（v5.5）==========
-  // 原则：已确认的类别跳过，未确认的继续搜；模式变更+最新动态永远不跳
+  // ========== 精简后的 5 条核心搜索（v5.15）==========
+  // 原则：去重冗余项，每条搜索覆盖一个维度；Tavily 失败自动降级 DuckDuckGo
   const isShortName = projectName.length <= 3
   const searchContext = isShortName ? `${projectName}代币 ${projectName} token crypto` : projectName
 
-  const allQueries = [];
+  // 5 条核心搜索（覆盖安全审计、融资、牌照合规、法律实体、负面舆情）
+  const allQueries = [
+    { label: '审计', query: `${projectName} 审计 CertiK SlowMist "${projectName}" audit security` },
+    { label: '融资', query: isShortName ? `${searchContext} 融资 投资 估值 funding raised investment million` : `${projectName} 融资 投资 估值 funding raised investment million` },
+    { label: '牌照/监管', query: `${projectName} MSB牌照 SEC 监管 "${projectName}" license regulation MAS compliance` },
+    { label: '法律实体', query: `${projectName} 注册地 法律实体 公司注册 "${projectName}" registered company incorporated legal entity` },
+    { label: '负面舆情', query: `${projectName} 跑路 骗局 维权 scam rug pull fraud complaint 割韭菜 资金盘` },
+  ];
 
-  // 融资（可减量：已知融资记录 → 只搜中文1条捕捉新轮次；未知 → 中英文2条全搜）
-  if (!skipCategories.has('融资')) {
-    allQueries.push({ label: '融资-中文', query: isShortName ? `${searchContext} 融资 投资 估值 新轮次` : `${projectName} 融资 投资 估值 新轮次` });
-    if (!fundingIsKnown) {
-      allQueries.push({ label: '融资-英文', query: isShortName ? `"${projectName} token" funding raised investment million` : `"${projectName}" funding raised investment million` });
-    }
-  }
+  console.log(`  🔎 [搜索] 执行 ${allQueries.length} 条查询 (Tavily→DuckDuckGo降级)`);
 
-  // 审计（不可跳：新审计报告随时可能发布，保持1条搜索）
-  if (!skipCategories.has('审计')) {
-    allQueries.push({ label: '审计', query: `${projectName} 审计 CertiK SlowMist "${projectName}" audit security` });
-  }
+  const tavilyApiKey = process.env.TAVILY_API_KEY;
+  const engineLog = []; // 记录每次搜索使用的引擎
 
-  // 牌照（可跳过：hasLicense=true 时）
-  if (!skipCategories.has('牌照')) {
-    allQueries.push({ label: '牌照/监管', query: `${projectName} MSB牌照 SEC 监管 "${projectName}" license regulation MAS compliance` });
-  }
-
-  // 法律实体（可跳过：legalEntities 非空时）
-  if (!skipCategories.has('法律实体')) {
-    allQueries.push({ label: '法律实体', query: `${projectName} 注册地 法律实体 公司注册 "${projectName}" registered company incorporated legal entity` });
-  }
-
-  // 🔒 永远保留（事实可能变化，不能从缓存推断）
-  allQueries.push({ label: '模式变更', query: `${projectName} 模式变更 ${projectName} 更换模式 ${projectName} 升级置换` });
-  allQueries.push({ label: '最新动态', query: `${searchContext} 最新 news 2025 2026` });
-
-  // 🆕 v5.14: 负面舆情专项搜索（拆分中英文 + 中文平台定向，覆盖中国人搞的项目）
-  // 不受 skipCategories 影响，永远执行——负面信息是最重要的风险信号
-  // 很多项目是中国团队运营，舆情主要在中文平台（知乎/微博/贴吧/抖音等），纯英文搜不到
-  allQueries.push({
-    label: '负面舆情-中文',
-    query: `${projectName} 跑路 骗局 维权 投诉 卷款 崩盘 归零 提现困难 无法提现 限制提现 锁仓 资金盘 杀猪盘 割韭菜 圈钱 空气币 失联 立案 报案 经侦`,
-  });
-  allQueries.push({
-    label: '负面舆情-平台',
-    query: `${projectName} 知乎 微博 百度贴吧 抖音 曝光 避雷 踩坑 黑幕 维权群 爆料 揭穿 真相 骗术`,
-  });
-  allQueries.push({
-    label: '负面舆情-英文',
-    query: `"${projectName}" scam exit scam rug pull fraud complaint cheat warning ponzi pyramid collapse disappeared`,
-  });
-
-  // 两批次并行（对半拆分）
-  const mid = Math.ceil(allQueries.length / 2);
-  const batch1 = allQueries.slice(0, mid);
-  const batch2 = allQueries.slice(mid);
-
-  const skippedList = [...skipCategories];
-  console.log(`  🔎 [Tavily] Gap驱动: 跳过[${skippedList.join(',') || '无'}], 融资${fundingIsKnown ? '减量' : '全量'}, 执行${allQueries.length}查询 (批1:${batch1.length} 批2:${batch2.length})`);
-
-  // 🔧 合约地址搜索：当有合约地址时，额外增加一条地址搜索（独立于批次，低优先级）
-  let addressSearchPromise = null
-  if (contractAddress && contractAddress !== '未提供' && contractAddress.length >= 40) {
-    addressSearchPromise = runQuery({
-      label: '地址搜索',
-      query: `${contractAddress} token project`,
-    }, BATCH_TIMEOUT)
-  }
-
-  // 单查询执行器（AbortController 超时控制）
-  async function runQuery(queryInfo, timeout) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
-    const qStart = Date.now();
-
-    try {
-      const res = await fetch('https://api.tavily.com/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          api_key: apiKey,
-          query: queryInfo.query,
-          topic: 'general',           // 不用 'news'，效果差
-          search_depth: 'basic',      // basic 深度对中文/亚洲项目效果最佳（v4/v4.1/v5 已验证）
-          max_results: 8,             // v5.10 提升到8，basic模式下标量更多候选更稳
-          include_answer: true,       // v3 恢复，AI 摘要
-          include_raw_content: false,
-          // 不设 include_domains/exclude_domains（不限域名，v4 已验证）
-        }),
-        signal: controller.signal,
-      });
-
-      // 积分监控
-      const creditsHeader = res.headers.get('x-tavily-credits-used');
-      if (creditsHeader) {
-        const credits = parseInt(creditsHeader, 10);
-        if (!isNaN(credits)) totalCreditsUsed += credits;
-      }
-      const remainingHeader = res.headers.get('x-tavily-credits-remaining');
-      if (remainingHeader) {
-        const remaining = parseInt(remainingHeader, 10);
-        if (!isNaN(remaining) && remaining < 200) {
-          console.warn(`⚠️  [Tavily] 剩余积分不足 200 (当前: ${remaining})，请注意！`);
-        }
-      }
-
-      if (!res.ok) {
-        const elapsed = ((Date.now() - qStart) / 1000).toFixed(1);
-        console.log(`  [${queryInfo.label}] 耗时 ${elapsed}s, 返回 0 条, HTTP ${res.status} ❌`);
-        return { label: queryInfo.label, results: [], count: 0, elapsed, error: `HTTP ${res.status}`, hit: false };
-      }
-
-      const data = await res.json();
-      const elapsed = ((Date.now() - qStart) / 1000).toFixed(1);
-
-      // AI 摘要提取（v3 恢复）
-      let answerText = '';
-      if (data.answer && typeof data.answer === 'string' && data.answer.trim()) {
-        answerText = data.answer.trim();
-      }
-
-      // 结果后处理（v3 恢复：域名优先级排序 + 去重；不设分数门槛，basic 模式下会误杀）
-      const seenUrls = new Set();
-      const seenTitles = new Set();
-      const results = (data.results || [])
-        .sort((a, b) => getDomainPriority(a.url) - getDomainPriority(b.url))
-        .filter(r => {
-          const normUrl = (r.url || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
-          const normTitle = (r.title || '').trim().toLowerCase();
-          if (seenUrls.has(normUrl) || seenTitles.has(normTitle)) return false;
-          seenUrls.add(normUrl);
-          seenTitles.add(normTitle);
-          return true;
-        })
-        .slice(0, 5)  // v5.10: 3→5，basic模式下标量质量波动大，多保留候选
-        .map(r => ({
-          title: r.title || '',
-          url: r.url || '',
-          content: (r.content || '').slice(0, 300),
-          score: r.score || 0,
-        }));
-
-      // 命中检测 + 日志
-      const hit = checkHit(queryInfo.label, results);
-      const hitLabel = getHitLabel(queryInfo.label);
-      console.log(`  [${queryInfo.label}] 耗时 ${elapsed}s, 返回 ${results.length} 条, 命中${hitLabel} ${hit ? '✅' : '❌'}`);
-
-      return { label: queryInfo.label, results, count: results.length, elapsed, hit, answerText };
-    } catch (err) {
-      const elapsed = ((Date.now() - qStart) / 1000).toFixed(1);
-      if (err.name === 'AbortError') {
-        console.warn(`  [${queryInfo.label}] 耗时 ${elapsed}s, 超时 ⏱️`);
-      } else {
-        console.error(`  [${queryInfo.label}] 耗时 ${elapsed}s, 错误: ${err.message}`);
-      }
-      return { label: queryInfo.label, results: [], count: 0, elapsed, error: err.message, hit: false };
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  // ========== 第一批次 ==========
-  console.log(`  🔎 [Tavily] 第一批次: ${batch1.map(q => q.label).join(', ')}`);
-  const b1 = await Promise.allSettled(batch1.map(q => runQuery(q, BATCH_TIMEOUT)));
+  // 5 条查询并行执行，每条各自降级
+  const results = await Promise.allSettled(
+    allQueries.map(q => searchSingle(q.label, q.query, tavilyApiKey, BATCH_TIMEOUT, engineLog))
+  );
 
   const allQueryResults = [];
-  for (const r of b1) {
+  for (const r of results) {
     if (r.status === 'fulfilled') allQueryResults.push(r.value);
   }
 
-  // ========== 第二批次 ==========
-  if (batch2.length > 0) {
-    if (Date.now() - startTime > TOTAL_TIMEOUT) {
-      console.log('⏱️  [Tavily] 总耗时超过 8s，跳过第二批次');
-    } else {
-      console.log(`  🔎 [Tavily] 第二批次: ${batch2.map(q => q.label).join(', ')}`);
-      const b2 = await Promise.allSettled(batch2.map(q => runQuery(q, BATCH_TIMEOUT)));
-      for (const r of b2) {
-        if (r.status === 'fulfilled') allQueryResults.push(r.value);
-      }
-    }
-  }
+  // 耗时分段记录
+  const searchElapsed = Date.now() - startTime;
 
-  // 🔧 合约地址搜索（与批次并行运行中，现在等待结果）
-  if (addressSearchPromise) {
-    try {
-      const addrResult = await addressSearchPromise
-      if (addrResult && addrResult.results?.length > 0) {
-        allQueryResults.push(addrResult)
-        console.log(`  [地址搜索] 返回 ${addrResult.results.length} 条`)
-      }
-    } catch { /* 地址搜索失败不影响主流程 */ }
+  // ─── 单条搜索执行器（含 Tavily→DuckDuckGo 降级）────────
+  async function searchSingle(label, query, apiKey, timeout, engineLog) {
+    const qStart = Date.now();
+    const fallbackResult = await searchWithFallback(query, apiKey, timeout, engineLog);
+    const elapsed = ((Date.now() - qStart) / 1000).toFixed(1);
+
+    // 命中检测
+    const hit = checkHit(label, fallbackResult.results);
+    const hitLabel = getHitLabel(label);
+    const engineIcon = fallbackResult.engine === 'tavily' ? '🔍' : fallbackResult.engine === 'duckduckgo' ? '🦆' : '❌';
+    console.log(`  ${engineIcon} [${label}] 耗时 ${elapsed}s, ${fallbackResult.engine || '无引擎'}, 返回 ${fallbackResult.results.length} 条, 命中${hitLabel} ${hit ? '✅' : '❌'}`);
+
+    return {
+      label,
+      results: fallbackResult.results,
+      count: fallbackResult.results.length,
+      elapsed,
+      hit,
+      answerText: fallbackResult.answerText || '',
+    };
   }
 
   // ========== 结果解析与字段提取 ==========
@@ -1231,6 +1133,7 @@ async function fetchRealtimeInfo(projectName, contractAddress = null, skipCatego
 
   // 🆕 v5.14: 负面舆情检测（中文+英文关键词全面扫描）
   const hasNegativeSentiment = /跑路|骗局|骗|维权|投诉|卷款|崩盘|归零|提现困难|无法提现|限制提现|资金盘|杀猪盘|割韭菜|圈钱|空气币|失联|立案|报案|经侦|曝光|避雷|踩坑|黑幕|scam|fraud|rug.?pull|exit.?scam|complaint|ponzi|pyramid|collapse|disappeared/i.test(allText);
+  searchHitNegative = hasNegativeSentiment;
 
   // 模式变更检测 v2：按搜索结果条目数计算，而非关键词种类数（更稳定）
   const modeChangeKeywords = [
@@ -1263,7 +1166,7 @@ async function fetchRealtimeInfo(projectName, contractAddress = null, skipCatego
 
   // 打印命中摘要
   console.log(
-    `  📊 [Tavily] 命中摘要: ` +
+    `  📊 [搜索] 命中摘要: ` +
     `负面舆情${hasNegativeSentiment ? '🚨✅' : '❌'} | ` +
     `审计${hasAudit ? '✅' : '❌'} | ` +
     `融资${hasFunding ? '✅' : '❌'} | ` +
@@ -1275,18 +1178,17 @@ async function fetchRealtimeInfo(projectName, contractAddress = null, skipCatego
   // ========== 整合文本生成（供 DeepSeek 使用） ==========
   if (allQueryResults.every(r => r.results.length === 0)) {
     const elapsed = Date.now() - startTime;
-    console.log(`🔍 [Tavily] 无搜索结果 (${elapsed}ms)`);
+    console.log(`🔍 [搜索] 无搜索结果 (${elapsed}ms)`);
     return { text: '', flags: { hasAudit: false, hasFunding: false, hasLicense: false, hasLegalEntity: false, hasModeChange: false, modeChangeCount: 0, hasNegativeSentiment: false } };
   }
 
-  // 按类别分组（融资-中文 + 融资-英文 → 融资信息；负面舆情-中文/平台/英文 → 负面舆情）
+  // 按类别分组
   function getCategory(label) {
-    if (label.startsWith('融资')) return '融资信息';
+    if (label === '融资') return '融资信息';
     if (label === '审计') return '审计信息';
-    if (label.startsWith('牌照')) return '牌照/监管';
-    if (label.startsWith('法律')) return '法律实体';
-    if (label.startsWith('模式')) return '模式变更';
-    if (label.startsWith('负面舆情')) return '负面舆情';
+    if (label === '牌照/监管') return '牌照/监管';
+    if (label === '法律实体') return '法律实体';
+    if (label === '负面舆情') return '负面舆情';
     return label;
   }
 
@@ -1303,7 +1205,7 @@ async function fetchRealtimeInfo(projectName, contractAddress = null, skipCatego
   }
 
   // 格式化各分类（固定顺序，每类最多3条）
-  const catOrder = ['负面舆情', '融资信息', '审计信息', '牌照/监管', '法律实体', '模式变更'];
+  const catOrder = ['负面舆情', '融资信息', '审计信息', '牌照/监管', '法律实体'];
   const sections = [];
   for (const cat of catOrder) {
     const items = categoryMap.get(cat);
@@ -1327,10 +1229,6 @@ async function fetchRealtimeInfo(projectName, contractAddress = null, skipCatego
   }
 
   const elapsed = Date.now() - startTime;
-
-  if (totalCreditsUsed > 0) {
-    console.log(`💰 [Tavily] 本次消耗 ${totalCreditsUsed} 积分 | 总耗时 ${elapsed}ms`);
-  }
 
   // 命中标记行（供 DeepSeek 快速了解搜索覆盖情况）
   const hints = [
@@ -1388,14 +1286,17 @@ async function handleGenerateReport(req, res) {
   }
 
   // 30秒防刷：同一用户 + 同一合约地址，禁止重复调用
+  // ⚠️ 快速验证（quick_verify）不触发防刷，也不写缓存，避免 blocking 紧接着的正常报告请求
   const antiSpamKey = `report_spam_${callerAddr.toLowerCase()}_${(contract_address || '').toLowerCase()}`;
   const lastCall = antiSpamCache.get(antiSpamKey);
   const now = Date.now();
-  if (lastCall && (now - lastCall) < 30000) {
+  if (!quick_verify && lastCall && (now - lastCall) < 30000) {
     console.warn(`🚫 防刷拦截: ${callerAddr.slice(0,10)}... / ${(contract_address || '').slice(0,10)}... (间隔 ${((now - lastCall)/1000).toFixed(1)}s)`);
     return jsonRes(res, 429, { error: '请勿频繁调用，30秒后再试' });
   }
-  antiSpamCache.set(antiSpamKey, now);
+  if (!quick_verify) {
+    antiSpamCache.set(antiSpamKey, now);
+  }
 
   const projectName = project_name.trim();
   const address = contract_address?.trim() || '未提供';
@@ -1742,17 +1643,30 @@ async function handleGenerateReport(req, res) {
     }
     // 🚨 已崩盘硬性封顶（缓存路径，独立于模式变更）
     if (cacheHistDim && cacheHistDim.score === 0) {
-      // 区分归零原因：≥3次变更 或 崩盘(mc<2) → 封顶；=2次 → 不封顶
+      // 🔥 v5.19: 检查是否有已验证的恶意特征证据（如强制锁仓/强制置换）
+      const hasMaliciousEvidence = facts?.verifiedEvidence?.some(ev =>
+        /强制锁仓|资金被锁|强制置换|强制兑换|提现关闭|社群解散|项目方操控|强制终止|单方面修改/.test(ev.content || '')
+      );
+      // 区分归零原因：≥3次变更 + 有恶意证据 → 封顶；=2次 → 不封顶；≥3次 + 无恶意 → 封顶但标注"高风险"
       const shouldCap = (cachedModeCount >= 3) || (cachedModeCount < 2);
       if (shouldCap) {
-        const beforeCap = reportData.total_score;
-        reportData.total_score = Math.min(reportData.total_score, 35);
-        const reason = cachedModeCount >= 3 ? `模式变更≥${cachedModeCount}次` : `已确认崩盘/跑路`;
-        if (beforeCap !== reportData.total_score) {
-          console.log(`🚨 [缓存→崩盘封顶] ${reason}，总分 ${beforeCap} → ${reportData.total_score}（强制 ≤35）`);
+        // 如果模式变更≥3次但无恶意证据 → 用高风险替代崩盘封顶
+        if (cachedModeCount >= 3 && !hasMaliciousEvidence && !hasCrashEvidence) {
+          // 修正历史维度为 2 分（不归零）
+          cacheHistDim.score = 2;
+          cacheHistDim.deduction = (cacheHistDim.deduction || '') + '；⚠️ 模式变更≥3次但未检测到恶意特征，标记为高风险（缓存修正）';
+          console.log(`🔧 [缓存→恶意特征] 模式变更≥${cachedModeCount}次无恶意特征，历史维度改为 2/10，跳过崩盘封顶`);
+          // 不执行封顶，跳过下方封顶代码
+        } else {
+          const beforeCap = reportData.total_score;
+          reportData.total_score = Math.min(reportData.total_score, 35);
+          const reason = cachedModeCount >= 3 ? `模式变更≥${cachedModeCount}次` : `已确认崩盘/跑路`;
+          if (beforeCap !== reportData.total_score) {
+            console.log(`🚨 [缓存→崩盘封顶] ${reason}，总分 ${beforeCap} → ${reportData.total_score}（强制 ≤35）`);
+          }
+          reportData.risk_level = '极高风险';
+          reportData.conclusion = '严禁参与（该项目已确认崩盘/跑路，资金存在永久性损失风险）';
         }
-        reportData.risk_level = '极高风险';
-        reportData.conclusion = '严禁参与（该项目已确认崩盘/跑路，资金存在永久性损失风险）';
       } else {
         console.log(`🔧 [缓存→封顶跳过] 模式变更=${cachedModeCount}次，历史归零但不封顶`);
       }
@@ -2039,14 +1953,9 @@ async function handleGenerateReport(req, res) {
     const result = await fetchRealtimeInfo(effectiveProjectName, address, skipCategories, fundingIsKnown);
     realtimeInfo = result.text;
     searchFlags = result.flags;
-    const queryCount = 2  // 模式变更 + 最新动态
-      + (fundingIsKnown ? 1 : 2)  // 融资
-      + 1  // 审计
-      + (skipCategories.has('牌照') ? 0 : 1)
-      + 1;  // 法律实体（永远保留）
-    console.log(`⏱️ [Tavily] 搜索完成，耗时 ${((Date.now() - tavilyStart) / 1000).toFixed(1)}s (${queryCount}条查询, 跳过[${[...skipCategories].join(',') || '无'}])`);
+    console.log(`⏱️ [搜索] 完成，耗时 ${((Date.now() - tavilyStart) / 1000).toFixed(1)}s (5条查询, Tavily→DuckDuckGo降级)`);
   } catch (tavilyErr) {
-    console.error('[Tavily] 搜索失败，降级为无实时数据模式:', tavilyErr.message);
+    console.error('[搜索] 失败，降级为无实时数据模式:', tavilyErr.message);
     realtimeInfo = '';
   }
 
@@ -2082,6 +1991,8 @@ async function handleGenerateReport(req, res) {
   let verifiedEvidenceText = '';
   // v5.9+阶段三：三态证据查询（verified/partial/pending） + 注入 Prompt + 收集 ID
   let referencedEvidenceIds = [];
+  let evidenceCounts = { verified: 0, partial: 0, pending: 0 };
+  let searchHitNegative = false;
   if (address && address !== '未提供') {
     try {
       const supabase = await getSupabase();
@@ -2117,6 +2028,8 @@ async function handleGenerateReport(req, res) {
           if (parts.length > 0) {
             verifiedEvidenceText = `\n## 【用户/社区补充信息】\n\n> **证据标注规范**：\n> - 引自已验证证据 → 标注"【社区验证】"\n> - 引自部分验证证据 → 标注"【用户反映】"\n> - 引自待验证证据 → 标注"【用户提供，待核实】"\n> - 多条证据指向同一风险点请综合表述，在报告末尾"局限性"中说明证据数量。\n\n${parts.join('\n\n')}`;
             console.log(`📝 [证据] 注入 ${allEvidence.length} 条证据到 prompt（verified=${verified.length}, partial=${partial.length}, pending=${pending.length}）`);
+            // 记录证据分类数量（供后续恶意特征二次验证用）
+            evidenceCounts = { verified: verified.length, partial: partial.length, pending: pending.length };
           }
 
           // v5.9.1: 已验证证据 → mergedFacts（触发交叉惩罚）
@@ -2228,6 +2141,24 @@ ${dataStatusLines.join('\n')}${missingHint}${realtimeInfo ? `\n${realtimeInfo}\n
     try { reportData = JSON.parse(jsonStr); }
     catch { return jsonRes(res, 502, { error: 'JSON parse failed' }); }
 
+    // 🚨 提取恶意特征检测结果（如有）
+    const maliciousFeatures = reportData.malicious_features?.detected === true
+      ? { detected: true, features: reportData.malicious_features.features || [], evidence: reportData.malicious_features.evidence || '' }
+      : { detected: false, features: [], evidence: null };
+
+    // 🔒 恶意特征二次验证：防止单条 pending 证据误触发
+    // 如果仅 pending 证据命中（无搜索、无已验证），应清除恶意特征标记
+    if (maliciousFeatures.detected && !searchHitNegative && evidenceCounts.verified === 0 && evidenceCounts.partial === 0 && evidenceCounts.pending <= 2) {
+      const onlyPending = evidenceCounts.pending > 0 && evidenceCounts.verified === 0 && evidenceCounts.partial === 0 && !searchHitNegative;
+      if (onlyPending) {
+        console.log('🔒 [恶意特征二次验证] 仅 pending 证据触发，无搜索佐证，清除恶意特征标记');
+        maliciousFeatures.detected = false;
+        maliciousFeatures.features = [];
+        maliciousFeatures.evidence = null;
+        reportData.malicious_features = { detected: false, features: [], evidence: null };
+      }
+    }
+
     // ===== 稳定评分系统 v2：加权归一化算法（确定性，同输入同输出）=====
     if (Array.isArray(reportData.six_dimensions) && reportData.six_dimensions.length > 0) {
 
@@ -2331,13 +2262,23 @@ ${dataStatusLines.join('\n')}${missingHint}${realtimeInfo ? `\n${realtimeInfo}\n
           if (histDim.deduction !== oldDeduction) {
             console.log(`🔧 历史维度 deduction 修正: "${oldDeduction}" → "${histDim.deduction}"`)
           }
-          // 🔥 v5.4 关键修复：历史维度 score 也必须修正！
-          // 模式变更≥2次 → 历史可靠性归零（多次换皮的链上项目不可信）
+          // 🔥 v5.19: 区分恶意特征
+          // 模式变更≥2次 → 检查是否有恶意特征
           if (newModeText.includes('≥2') && histDim.score > 0) {
-            const oldScore = histDim.score
-            histDim.score = 0
-            histDim.max = 10
-            console.log(`🔧 历史维度 score 修正: ${oldScore}/10 → 0/10 (模式变更≥2次，历史可靠性归零)`)
+            if (maliciousFeatures.detected) {
+              // 有恶意特征 → 历史归零（崩盘判定）
+              const oldScore = histDim.score
+              histDim.score = 0
+              histDim.max = 10
+              console.log(`🚨 [恶意特征] 历史维度 score 修正: ${oldScore}/10 → 0/10 (检测到恶意特征: ${maliciousFeatures.features.join(', ')})`)
+            } else {
+              // 无恶意特征 → 给 2 分（高风险但不判崩盘）
+              const oldScore = histDim.score
+              histDim.score = Math.min(histDim.score, 2)
+              histDim.max = 10
+              histDim.deduction = (histDim.deduction || '') + '；⚠️ 模式变更频繁但未检测到恶意特征，建议密切关注项目动态'
+              console.log(`🔧 [正常升级] 历史维度 score 修正: ${oldScore}/10 → 2/10 (模式变更≥2次，未检测到恶意特征)`)
+            }
           }
         }
       }
@@ -2593,21 +2534,47 @@ ${dataStatusLines.join('\n')}${missingHint}${realtimeInfo ? `\n${realtimeInfo}\n
     // 🚨 项目状态前置判断：已崩盘硬性封顶（事件权重 > 指标权重）
     // 区分三种归零原因：
     //   - 已崩盘/跑路（modeCount<2 且 history=0）→ 封顶 ≤35
-    //   - 模式变更≥3次（modeCount≥3 且 history=0）→ 封顶 ≤35 + 极高风险
+    //   - 模式变更≥3次 + 恶意特征（modeCount≥3, history=0, malicious=true）→ 封顶 ≤35 + 极高风险
+    //   - 模式变更≥3次 - 无恶意特征（modeCount≥3, history=0, malicious=false）→ 不封顶，标注高风险
     //   - 模式变更2次（modeCount=2 且 history=0）→ 仅归零，不封顶
     if (finalHistDim && finalHistDim.score === 0) {
-      // effectiveModeCount：≥2 才有效，<2 表示非模式变更原因归零（即崩盘/跑路）
       const mc = (typeof effectiveModeCount === 'number') ? effectiveModeCount : 0;
-      const shouldCap = (mc >= 3) || (mc < 2); // ≥3次变更 或 崩盘 → 封顶；=2次 → 不封顶
-      if (shouldCap) {
-        const beforeCap = reportData.total_score;
-        reportData.total_score = Math.min(beforeCap, 35);
-        if (beforeCap !== reportData.total_score) {
-          const reason = mc >= 3 ? `模式变更≥3次` : `已确认崩盘/跑路`;
-          console.log(`🚨 [崩盘封顶] ${reason}，总分 ${beforeCap} → ${reportData.total_score}（强制 ≤35）`);
+      // 🔥 v5.19: 模式变更≥3次但无恶意特征 → 不封顶
+      if (mc >= 3 && !maliciousFeatures.detected) {
+        // 修正历史维度为 2 分（修正AI可能错误的归零）
+        finalHistDim.score = 2;
+        finalHistDim.deduction = (finalHistDim.deduction || '') + '；⚠️ 模式变更≥3次但未检测到恶意特征，标记为高风险（服务端修正）';
+        console.log(`🔧 [最终校准] 模式变更≥${mc}次无恶意特征，历史维度改为 2/10，跳过崩盘封顶`);
+        // 重新计算总分（历史维度已改为2分）
+        const _DIM_SPEC_FINAL = {
+          '代码与技术安全': { maxScore: 25, weight: 0.25 },
+          '团队与运营透明度': { maxScore: 20, weight: 0.20 },
+          '经济模型与资金安全': { maxScore: 20, weight: 0.20 },
+          '社群与市场热度': { maxScore: 15, weight: 0.15 },
+          '历史与执行可靠性': { maxScore: 10, weight: 0.10 },
+          '合规性与法律风险': { maxScore: 10, weight: 0.10 },
+        };
+        let newTotal = 0;
+        for (const d of (reportData.six_dimensions || [])) {
+          const key = Object.keys(_DIM_SPEC_FINAL).find(k => d.dimension?.includes(k));
+          if (key && d.score != null) {
+            const { maxScore, weight } = _DIM_SPEC_FINAL[key];
+            newTotal += (d.score / maxScore) * weight * 100;
+          }
         }
+        reportData.total_score = Math.min(100, Math.round(newTotal));
       } else {
-        console.log(`🔧 [封顶跳过] 模式变更=2次，历史归零但不封顶（总分保持 ${reportData.total_score}）`);
+        const shouldCap = (mc >= 3) || (mc < 2);
+        if (shouldCap) {
+          const beforeCap = reportData.total_score;
+          reportData.total_score = Math.min(beforeCap, 35);
+          if (beforeCap !== reportData.total_score) {
+            const reason = mc >= 3 ? `模式变更≥3次` : `已确认崩盘/跑路`;
+            console.log(`🚨 [崩盘封顶] ${reason}，总分 ${beforeCap} → ${reportData.total_score}（强制 ≤35）`);
+          }
+        } else {
+          console.log(`🔧 [封顶跳过] 模式变更=2次，历史归零但不封顶（总分保持 ${reportData.total_score}）`);
+        }
       }
     }
     // 基于最终总分重算风险等级
@@ -2620,8 +2587,29 @@ ${dataStatusLines.join('\n')}${missingHint}${realtimeInfo ? `\n${realtimeInfo}\n
 
     // 🚨 已崩盘项目强制标注（覆盖风险等级判断，双重保险）
     if (finalHistDim && finalHistDim.score === 0) {
-      reportData.risk_level = '极高风险';
-      reportData.conclusion = '严禁参与（该项目已确认崩盘/跑路，资金存在永久性损失风险）';
+      // 🔥 v5.19: 检查是否有恶意特征确定崩盘标注
+      if (!maliciousFeatures.detected && (typeof effectiveModeCount === 'number' ? effectiveModeCount : 0) >= 3) {
+        // 模式变更≥3次但无恶意特征 → 标注高风险而非崩盘
+        const highRiskTotal = reportData.total_score;
+        if (highRiskTotal >= 60) {
+          reportData.risk_level = '中等风险';
+          reportData.conclusion = '谨慎参与';
+        } else if (highRiskTotal >= 40) {
+          reportData.risk_level = '高风险';
+          reportData.conclusion = '不建议参与';
+        } else {
+          reportData.risk_level = '高风险';
+          reportData.conclusion = '不建议参与（该项目模式变更频繁，但未检测到恶意特征，建议密切关注）';
+        }
+        reportData.ai_summary = '⚠️ 该项目模式变更频繁（≥3次），但未发现强制锁仓、强制置换等恶意特征，建议密切关注项目动态。' + (reportData.ai_summary || '');
+      } else {
+        reportData.risk_level = '极高风险';
+        reportData.conclusion = '严禁参与（该项目已确认崩盘/跑路，资金存在永久性损失风险）';
+        // 在 ai_summary 中追加恶意特征信息（如有）
+        if (maliciousFeatures.detected) {
+          reportData.ai_summary = `🚨 检测到恶意特征：${maliciousFeatures.features.join('、')}。${maliciousFeatures.evidence || ''} ${reportData.ai_summary || ''}`;
+        }
+      }
     }
 
     console.log(`✅ 报告: 总分${reportData.total_score}, 等级: ${reportData.risk_level}`);
@@ -2704,6 +2692,16 @@ ${dataStatusLines.join('\n')}${missingHint}${realtimeInfo ? `\n${realtimeInfo}\n
         }
       } else if (typeof reportData.public_opinion === 'string') {
         reportData.public_opinion = localizeEnTerms(reportData.public_opinion);
+      }
+    }
+
+    // 🆕 无合约地址提示：非Web3项目数据有限
+    if (!address || address === '未提供' || address === 'undefined' || address === '') {
+      const noWeb3Note = '⚠️ 提示：该项目未提供合约地址，链上数据无法获取，评估结果仅供参考。如项目不属于Web3领域，评估维度可能不适用。';
+      if (reportData.ai_summary && typeof reportData.ai_summary === 'string') {
+        reportData.ai_summary = reportData.ai_summary + '\n\n' + noWeb3Note;
+      } else {
+        reportData.ai_summary = noWeb3Note;
       }
     }
 
@@ -3965,6 +3963,95 @@ async function handleCouponList(req, res) {
   }
 }
 
+// POST /api/coupons/use — 消耗代金券（每次解锁报告消耗1张）
+async function handleCouponUse(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'Method not allowed' });
+  try {
+    const body = await readBody(req);
+    const { user_address } = body;
+    if (!user_address) return jsonRes(res, 400, { error: 'user_address is required' });
+
+    const supabase = await getSupabase();
+    const addr = user_address.toLowerCase();
+
+    // 查找用户的活跃代金券（按金额降序排，优先用大额）
+    const { data: activeCoupons } = await supabase
+      .from('coupons')
+      .select('id, amount')
+      .eq('user_address', addr)
+      .eq('status', 'active')
+      .order('amount', { ascending: false })
+      .limit(1);
+
+    if (!activeCoupons || activeCoupons.length === 0) {
+      return jsonRes(res, 200, { success: true, used: 0, amount: 0, message: '无可用代金券' });
+    }
+
+    const coupon = activeCoupons[0];
+    const now = new Date().toISOString();
+
+    // 标记为已使用
+    const { error: updErr } = await supabase
+      .from('coupons')
+      .update({ status: 'used', used_at: now })
+      .eq('id', coupon.id);
+
+    if (updErr) throw updErr;
+
+    console.log(`[Coupon] 用户 ${addr.slice(0, 6)}... 消耗代金券 #${coupon.id}，抵扣 ${coupon.amount} USDT`);
+    return jsonRes(res, 200, { success: true, used: 1, amount: parseFloat(coupon.amount) });
+  } catch (err) {
+    return jsonRes(res, 500, { error: err.message });
+  }
+}
+
+// ===== 反馈提交（普通用户，无需 admin 登录） =====
+async function handleFeedbackSubmit(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'Method not allowed' });
+  try {
+    const body = await readBody(req);
+    const { content, user_address } = body;
+    if (!content || !content.trim()) return jsonRes(res, 400, { error: 'content is required' });
+
+    const supabase = await getSupabase();
+    const { data, error } = await supabase.from('feedback').insert({
+      content: content.trim(),
+      user_address: user_address?.toLowerCase() || null,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+    }).select('id');
+
+    if (error) {
+      console.error('[Feedback] 写入失败:', error.message);
+      return jsonRes(res, 500, { error: error.message });
+    }
+    console.log(`[Feedback] 新反馈 #${data?.[0]?.id} 来自 ${user_address || '匿名'}`);
+    return jsonRes(res, 200, { success: true, id: data?.[0]?.id });
+  } catch (err) {
+    return jsonRes(res, 500, { error: err.message });
+  }
+}
+
+// ===== 站点配置公共读取（前端页面用） =====
+async function handleSiteConfig(req, res) {
+  try {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const key = url.searchParams.get('key');
+    const { readFileSync } = await import('node:fs');
+    const { join, dirname } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const configPath = join(dirname(fileURLToPath(import.meta.url)), 'config', 'site-config.json');
+    let config = {};
+    try { config = JSON.parse(readFileSync(configPath, 'utf-8')); } catch {}
+    if (key) {
+      return jsonRes(res, 200, { success: true, data: { [key]: config[key] || null } });
+    }
+    return jsonRes(res, 200, { success: true, data: config });
+  } catch (err) {
+    return jsonRes(res, 500, { error: err.message });
+  }
+}
+
 // ===== Router =====
 const routes = {
   '/api/add-project':              handleAddProject,
@@ -3989,6 +4076,9 @@ const routes = {
   '/api/withdraw/history':       handleWithdrawHistory,
   '/api/payment/callback':       handlePaymentCallback,
   '/api/coupons/list':           handleCouponList,
+  '/api/coupons/use':            handleCouponUse,
+  '/api/feedback':               handleFeedbackSubmit,
+  '/api/site-config':            handleSiteConfig,
 };
 
 // 前缀匹配路由表（用于 /api/evidence/list?foo=bar 场景）
@@ -3997,6 +4087,11 @@ const prefixRoutes = [
   { prefix: '/api/evidence/list',    handler: handleEvidenceList },
   { prefix: '/api/evidence/verify',  handler: handleEvidenceVerify },
   { prefix: '/api/chat',             handler: handleChat },
+  { prefix: '/api/feedback',         handler: handleFeedbackSubmit },
+  { prefix: '/api/coupons/use',      handler: handleCouponUse },
+  { prefix: '/api/site-config',      handler: handleSiteConfig },
+  // 管理后台
+  { prefix: '/api/admin',            handler: handleAdmin },
 ];
 
 // ===== Health Check =====
@@ -4425,5 +4520,8 @@ server.listen(PORT, () => {
   console.log('   路由: /api/add-project, /api/generate-risk-report, /api/generate-business-report, /api/token-info');
   console.log('   证据: /api/evidence/submit, /api/evidence/list, /api/evidence/verify');
   console.log('   对话: /api/chat (证据融入对话)');
-  console.log('   邀请返佣+代金券: /api/invite/*, /api/withdraw/*, /api/payment/callback, /api/coupons/list\n');
+  console.log('   邀请返佣+代金券: /api/invite/*, /api/withdraw/*, /api/payment/callback, /api/coupons/list, /api/coupons/use');
+  console.log('   反馈: /api/feedback (问题反馈)');
+  console.log('   站点配置: /api/site-config (前端展示数字)');
+  console.log('   管理后台: /api/admin/* (仪表盘/提现/证据/项目/用户/反馈/配置)\n');
 });

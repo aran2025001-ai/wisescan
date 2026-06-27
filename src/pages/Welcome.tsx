@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { useNavigate } from 'react-router-dom'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
@@ -9,6 +9,19 @@ export default function Welcome() {
   const { isConnected, status, address } = useAccount()
   const navigate = useNavigate()
   const connectRequested = useRef(false)
+  const [userCount, setUserCount] = useState('500')
+
+  // 获取后台配置的用户展示数字
+  useEffect(() => {
+    fetch('/api/site-config?key=display_user_count')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.data?.display_user_count) {
+          setUserCount(data.data.display_user_count)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (status === 'connected' && isConnected && address && connectRequested.current) {
@@ -90,7 +103,7 @@ export default function Welcome() {
 
         {/* 底部社交证明 */}
         <p className="text-center text-xs text-zinc-500 mb-4">
-          已有<span className="font-semibold text-zinc-400">500+</span>位用户使用明鉴进行项目评估
+          已有<span className="font-semibold text-zinc-400">{userCount}+</span>位用户使用明鉴进行项目评估
         </p>
       </div>
     </div>

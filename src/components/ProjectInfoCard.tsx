@@ -156,7 +156,7 @@ export default function ProjectInfoCard({
     if (integrityScore !== undefined) return integrityScore
     let s = 10
     if (projectName && projectName !== '未命名项目') s += 5
-    if (contractAddress && contractAddress !== '0x742d35Cc6634C0532925a3b844Bc454e4438f44e') s += 5
+    if (contractAddress && contractAddress !== '0x742d35Cc6634C0532925a3b844Bc454e4438f44e' && contractAddress !== '无合约地址') s += 5
     const hasOnChain = !!effectiveOnChain?.tokenName && effectiveOnChain.tokenName !== '未知'
     if (hasOnChain) s += 20
     if (reportData?.total_score !== undefined && reportData.total_score > 0) s += 20

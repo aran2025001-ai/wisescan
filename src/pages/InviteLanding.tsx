@@ -2,12 +2,22 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Share2 } from 'lucide-react'
 import QRCode from 'qrcode'
+import { useAccount } from 'wagmi'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
 
 export default function InviteLanding() {
   const navigate = useNavigate()
+  const { address, isConnected } = useAccount()
 
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [toast, setToast] = useState('')
+  const [accepting, setAccepting] = useState(false)
+  const [acceptDone, setAcceptDone] = useState(false)
+
+  // 从 URL 解析邀请码
+  const inviteCode = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('code') || ''
+    : ''
 
   // 生成二维码（用当前页面URL）
   useEffect(() => {
@@ -19,7 +29,7 @@ export default function InviteLanding() {
 
   // Toast自动消失
   useEffect(() => {
-    if (toast) { const t = setTimeout(() => setToast(''), 2000); return () => clearTimeout(t) }
+    if (toast) { const t = setTimeout(() => setToast(''), 3000); return () => clearTimeout(t) }
   }, [toast])
 
   // 复制链接
@@ -39,8 +49,38 @@ export default function InviteLanding() {
     })
   }, [])
 
-  // 点击确认 → 直接跳转欢迎页
-  const handleAccept = () => navigate('/', { replace: true })
+  // 接受邀请
+  const handleAccept = async () => {
+    if (!isConnected || !address) {
+      setToast('请先连接钱包')
+      return
+    }
+    if (!inviteCode) {
+      setToast('邀请码无效')
+      return
+    }
+    setAccepting(true)
+    setToast('')
+    try {
+      const res = await fetch('/api/invite/accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invite_code: inviteCode, invitee_address: address }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setAcceptDone(true)
+        setToast('🎉 接受成功！')
+        setTimeout(() => navigate('/', { replace: true }), 1500)
+      } else {
+        setToast(data.error || '接受邀请失败，请稍后重试')
+      }
+    } catch {
+      setToast('网络错误，请稍后重试')
+    } finally {
+      setAccepting(false)
+    }
+  }
 
   const handleGoHome = () => navigate('/', { replace: true })
 
@@ -61,18 +101,39 @@ export default function InviteLanding() {
         {/* 底部渐变遮罩：只覆盖底部，不挡二维码 */}
         <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-black/95 via-black/40 to-transparent pointer-events-none" />
 
-        {/* 确认按钮：定位在二维码上方 */}
+        {/* 确认按钮/连接钱包：定位在二维码上方 */}
         <div className="absolute inset-x-0" style={{ bottom: '120px' }}>
           <div className="px-5">
-            <button
-              onClick={handleAccept}
-              className="w-full h-12 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 active:scale-[0.98]"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-              确认接受邀请
-            </button>
+            {acceptDone ? (
+              <div className="w-full h-12 rounded-full bg-green-600 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg">
+                🎉 接受成功！
+              </div>
+            ) : !isConnected ? (
+              <ConnectButton.Custom>
+                {({ openConnectModal }) => (
+                  <button
+                    onClick={openConnectModal}
+                    className="w-full h-12 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 active:scale-[0.98]"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                    连接钱包后接受邀请
+                  </button>
+                )}
+              </ConnectButton.Custom>
+            ) : (
+              <button
+                onClick={handleAccept}
+                disabled={accepting || !inviteCode}
+                className="w-full h-12 rounded-full bg-blue-500 hover:bg-blue-600 disabled:bg-zinc-600 text-white text-sm font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 active:scale-[0.98]"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                {accepting ? '处理中...' : '确认接受邀请'}
+              </button>
+            )}
           </div>
         </div>
 

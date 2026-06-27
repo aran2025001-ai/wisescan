@@ -87,6 +87,7 @@ export default function BusinessBreakdown() {
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [showBackConfirmModal, setShowBackConfirmModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [activeCouponAmount, setActiveCouponAmount] = useState(0)
   const [showMethodologyModal, setShowMethodologyModal] = useState(false)
   const [showAlertModal, setShowAlertModal] = useState(false)
   const [alertMsg, setAlertMsg] = useState("")
@@ -204,7 +205,7 @@ export default function BusinessBreakdown() {
 
   // 新用户引导：逐步推送消息，完成后恢复自动滚动
   useEffect(() => {
-    const onboarded = localStorage.getItem('wisescan_completed_first_scan') === 'true'
+    const onboarded = localStorage.getItem('wisescan_breakdown_onboarded') === 'true'
     const all = initialMessages()
 
     if (onboarded) {
@@ -223,7 +224,6 @@ export default function BusinessBreakdown() {
           }
         }, i * 2000)
         onboardingTimersRef.current.push(timer)
-      })
       })
     }
   }, [])
@@ -460,7 +460,19 @@ export default function BusinessBreakdown() {
     }
 
     // 每次拆解都要付费，弹出支付确认弹窗
+    // 同时查代金券
     setShowPaymentModal(true)
+    fetch(`/api/coupons/list?user_address=${address}`)
+      .then(r => r.json())
+      .then(data => {
+        const activeCoupons = (data.coupons || []).filter((c: any) => c.status === 'active')
+        if (activeCoupons.length > 0) {
+          setActiveCouponAmount(parseFloat(activeCoupons[0].amount) || 2.99)
+        } else {
+          setActiveCouponAmount(0)
+        }
+      })
+      .catch(() => setActiveCouponAmount(0))
   }
 
   // 统一的生成逻辑（调用真实 API）
@@ -520,7 +532,7 @@ export default function BusinessBreakdown() {
         project_name: formData.projectName || reportBody.share_card?.project_name || '未命名项目',
       })
       // ✅ 首次拆解完成标记（老用户下次进入直接展示全部内容）
-      localStorage.setItem('wisescan_completed_first_scan', 'true')
+      localStorage.setItem('wisescan_breakdown_onboarded', 'true')
 
       // 移除 loading 消息，添加报告卡片
       setMessages(prev => {
@@ -567,8 +579,22 @@ export default function BusinessBreakdown() {
     }
   }
 
-  const handleConfirmPayment = () => {
+  const handleConfirmPayment = async () => {
     setShowPaymentModal(false)
+
+    // 消耗代金券（如果有的话）
+    try {
+      const coupRes = await fetch('/api/coupons/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_address: address }),
+      })
+      const coupData = await coupRes.json()
+      if (coupData.success && coupData.used > 0) {
+        console.log(`💳 商业模式拆解消耗代金券 ${coupData.amount} USDT (${coupData.used} 张)`)
+      }
+    } catch { /* 代金券消耗失败不影响报告生成 */ }
+
     hasResultsRef.current = true
     localStorage.setItem(paidKey, "true")
     setIsBreakdownPaid(true)
@@ -913,6 +939,18 @@ export default function BusinessBreakdown() {
             <p className="text-zinc-300 text-xs leading-relaxed">
               将为您生成商业模式拆解报告，需支付 5.99 USDT（当前仅支持BSC链（BEP20）支付）。是否继续？
             </p>
+            {activeCouponAmount > 0 && (
+              <div className="bg-zinc-800/70 rounded-lg p-2.5 border border-blue-500/20">
+                <p className="text-blue-400 text-xs font-medium">🎟️ 检测到代金券</p>
+                <p className="text-zinc-400 text-[11px] mt-1">
+                  您有 <span className="text-blue-400 font-semibold">{activeCouponAmount} USDT</span> 代金券，
+                  可抵扣部分费用（原价 <span className="text-zinc-300">5.99 USDT</span>）。
+                </p>
+                <p className="text-zinc-500 text-[10px] mt-1">
+                  确认后将自动使用代金券，仍需支付 {Math.max(0, 5.99 - activeCouponAmount).toFixed(2)} USDT
+                </p>
+              </div>
+            )}
             <div className="flex gap-3 pt-1">
               <button
                 onClick={() => setShowPaymentModal(false)}
