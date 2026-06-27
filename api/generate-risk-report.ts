@@ -735,8 +735,8 @@ const SYSTEM_PROMPT = `你是「明鉴」平台的**明鉴·风险洞察官**，
 | 6 | 中心化操控 | "项目方操控"、"价格操控"、"强制终止" | 用户贡献 / 舆情 / 链上数据 |
 
 **检测规则：**
-- 检测到任意 1 条恶意特征 → `malicious_features.detected = true`
-- 未检测到 → `malicious_features.detected = false`
+- 检测到任意 1 条恶意特征 → malicious_features.detected = true
+- 未检测到 → malicious_features.detected = false
 - **技术升级（如 ETH POW→POS、Uniswap V2→V3、品牌更名）不属于恶意特征**，不应标记
 - 主流公链/知名协议的技术迭代，应标记为"正常升级"
 
