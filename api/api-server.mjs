@@ -800,13 +800,10 @@ async function verifyEvmContract(address, { fastMode = false } = {}) {
     }
   }
 
-  // 全部 RPC 不可用 → 服务降级
+  // 全部 RPC 不可用 → 服务降级放行（不卡用户）
   if (errorCount >= TOTAL_PROBES) {
-    console.log(`❌ 所有 EVM RPC 不可用 [${elapsed}ms]`)
-    return {
-      valid: false, chain: 'evm',
-      reason: '链上验证服务暂时不可用（全部 RPC 节点无响应），请稍后重试'
-    }
+    console.log(`⚠️ 所有 EVM RPC 不可用 [${elapsed}ms]，服务降级放行: ${address}`)
+    return { valid: true, chain: 'evm', reason: '链上验证超时，已放行（结果仅供参考）' }
   }
 
   // 不确定 → 放行（不挡用户）
