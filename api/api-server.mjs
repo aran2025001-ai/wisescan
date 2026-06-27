@@ -1271,7 +1271,7 @@ async function handleGenerateReport(req, res) {
   }
 
   const body = await readBody(req);
-  const { project_name, contract_address, user_notes, user_notes_images, quick_verify, user_address } = body;
+  const { project_name, contract_address, user_notes, user_notes_images, quick_verify, user_address, frontend_verified } = body;
 
   if (!project_name || !project_name.trim()) {
     return jsonRes(res, 400, { error: 'project_name is required' });
@@ -1305,52 +1305,56 @@ async function handleGenerateReport(req, res) {
     detectedChain = detectChain(address) || 'evm'
 
     if (quick_verify) {
-      // 🆕 v5.11: 先查缓存 — 已经扫描归档的项目（project_facts 中有记录）
-      //    直接放行，不必重新链上验证。
-      //    防止 RPC 波动/超时导致已知合约被误判"非合约"。
-      let cacheVerified = false
-      if (address) {
-        try {
-          const { source } = await getFacts(address)
-          if (source !== 'none') {
-            console.log(`📦 [quick_verify] 缓存命中（${source}），跳过链上验证: ${address}`)
-            cacheVerified = true
-          }
-        } catch (e) {
-          console.log(`⚠️ [quick_verify] 缓存查询异常（降级链上验证）: ${e.message}`)
-        }
-      }
-
-      if (!cacheVerified) {
-        // 🔗 链上快速验证（5 条主流 EVM 链: ETH/BSC/Polygon/Arbitrum/Base）
-        //    失败后自动降级为全量扫描（10 条 EVM 链 + TRON/Solana）
-        //    防止 Linea/Scroll/zkSync/Optimism/Avalanche 等链上的合约被误杀
-        console.log(`🔗 快速验证合约地址: ${address}`)
-        let result = await isValidContract(address, { fastMode: true })
-        if (!result.valid) {
-          console.log(`⚠️ 快速验证未命中，降级全量扫描: ${address}`)
-          result = await isValidContract(address, { fastMode: false })
-          if (!result.valid) {
-            console.log(`❌ 全量扫描也失败: ${address} — ${result.reason}`)
-            const chainLabel =
-              result.chain === 'evm' ? 'EVM 兼容链（ETH/BSC/Polygon/Arbitrum/Base 等 10 链）'
-              : result.chain === 'tron' ? 'TRON 链'
-              : result.chain === 'solana' ? 'Solana 链'
-              : result.chain
-            return jsonRes(res, 200, {
-              success: false,
-              verified: false,
-              error: `合约地址验证失败：${result.reason}。\n\n请检查地址和链类型是否正确。`,
-            })
-          }
-        }
-        detectedChain = result.chain
-        console.log(`✅ 合约验证通过: ${address} (${detectedChain})`)
+      // 🆕 v6.0: 前端已验证 → 跳过链上 RPC 验证（避免 Render/IP 被限流）
+      if (frontend_verified) {
+        console.log(`✅ [quick_verify] 前端已验证合约地址，跳过链上 RPC: ${address}`)
       } else {
-        // 缓存旁路通过 — 不需要链上验证
-        console.log(`✅ [quick_verify] 缓存旁路通过: ${address}`)
+        // 🆕 v5.11: 先查缓存 — 已经扫描归档的项目（project_facts 中有记录）
+        //    直接放行，不必重新链上验证。
+        //    防止 RPC 波动/超时导致已知合约被误判"非合约"。
+        let cacheVerified = false
+        if (address) {
+          try {
+            const { source } = await getFacts(address)
+            if (source !== 'none') {
+              console.log(`📦 [quick_verify] 缓存命中（${source}），跳过链上验证: ${address}`)
+              cacheVerified = true
+            }
+          } catch (e) {
+            console.log(`⚠️ [quick_verify] 缓存查询异常（降级链上验证）: ${e.message}`)
+          }
+        }
+
+        if (!cacheVerified) {
+          // 🔗 链上快速验证（5 条主流 EVM 链: ETH/BSC/Polygon/Arbitrum/Base）
+          //    失败后自动降级为全量扫描（10 条 EVM 链 + TRON/Solana）
+          //    防止 Linea/Scroll/zkSync/Optimism/Avalanche 等链上的合约被误杀
+          console.log(`🔗 快速验证合约地址: ${address}`)
+          let result = await isValidContract(address, { fastMode: true })
+          if (!result.valid) {
+            console.log(`⚠️ 快速验证未命中，降级全量扫描: ${address}`)
+            result = await isValidContract(address, { fastMode: false })
+            if (!result.valid) {
+              console.log(`❌ 全量扫描也失败: ${address} — ${result.reason}`)
+              const chainLabel =
+                result.chain === 'evm' ? 'EVM 兼容链（ETH/BSC/Polygon/Arbitrum/Base 等 10 链）'
+                : result.chain === 'tron' ? 'TRON 链'
+                : result.chain === 'solana' ? 'Solana 链'
+                : result.chain
+              return jsonRes(res, 200, {
+                success: false,
+                verified: false,
+                error: `合约地址验证失败：${result.reason}。\n\n请检查地址和链类型是否正确。`,
+              })
+            }
+          }
+          detectedChain = result.chain
+          console.log(`✅ 合约验证通过: ${address} (${detectedChain})`)
+        } else {
+          // 缓存旁路通过 — 不需要链上验证
+          console.log(`✅ [quick_verify] 缓存旁路通过: ${address}`)
+        }
       }
-    } else {
       // 🔗 完整验证：验所有 12 条链（10 EVM + TRON + Solana）
       // 🆕 v5.11: 先查缓存 — 已归档的项目直接放行
       let cacheVerified = false

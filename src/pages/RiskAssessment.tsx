@@ -1285,6 +1285,7 @@ export default function RiskAssessment() {
         contract_address: scanAddr || undefined,
         quick_verify: true,
         user_address: address || undefined,
+        frontend_verified: true,
       }
       console.log('[WiseScan] 开始快速验证', verifyBody)
 
