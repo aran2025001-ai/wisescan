@@ -602,6 +602,7 @@ const CHAIN_RPC_MAP = {
     'https://bsc.publicnode.com',              // ✅ ~740ms
     'https://bsc-rpc.publicnode.com',          // ✅ ~750ms
     'https://1rpc.io/bsc',                     // ⚠️ 不稳定 (400)
+    ...(process.env.NODEREAL_RPC_URL ? [process.env.NODEREAL_RPC_URL] : []), // NodeReal BSC RPC
   ],
   polygon: [
     'https://polygon-rpc.com',
