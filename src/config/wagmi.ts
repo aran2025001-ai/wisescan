@@ -6,12 +6,6 @@ import {
   okxWallet,
   coinbaseWallet,
   walletConnectWallet,
-  tokenPocketWallet,
-  imTokenWallet,
-  trustWallet,
-  rainbowWallet,
-  phantomWallet,
-  zerionWallet,
   rabbyWallet,
   safepalWallet,
   bitgetWallet,
@@ -27,9 +21,6 @@ const connectors = connectorsForWallets(
       groupName: '推荐',
       wallets: [
         injectedWallet,
-        tokenPocketWallet,
-        imTokenWallet,
-        trustWallet,
         okxWallet,
         coinbaseWallet,
         walletConnectWallet,
@@ -38,9 +29,6 @@ const connectors = connectorsForWallets(
     {
       groupName: '更多钱包',
       wallets: [
-        rainbowWallet,
-        phantomWallet,
-        zerionWallet,
         rabbyWallet,
         safepalWallet,
         bitgetWallet,
