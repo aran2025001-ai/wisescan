@@ -3,7 +3,6 @@ import { mainnet, sepolia } from 'wagmi/chains'
 import { connectorsForWallets } from '@rainbow-me/rainbowkit'
 import {
   injectedWallet,
-  metaMaskWallet,
   okxWallet,
   coinbaseWallet,
   walletConnectWallet,
@@ -28,7 +27,6 @@ const connectors = connectorsForWallets(
       groupName: '推荐',
       wallets: [
         injectedWallet,
-        metaMaskWallet,
         tokenPocketWallet,
         imTokenWallet,
         trustWallet,
