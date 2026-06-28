@@ -46,7 +46,7 @@ export default function Welcome() {
             </div>
             <span className="text-zinc-300 text-xs font-medium flex items-center justify-center">
               <span>项目安全评估</span>
-              <span className="mx-3">▏</span>
+              <span className="w-[2px] h-3 bg-zinc-500 mx-2.5 rounded-full"></span>
               <span>商业模式分析</span>
             </span>
           </div>
