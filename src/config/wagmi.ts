@@ -3,40 +3,15 @@ import { mainnet, sepolia } from 'wagmi/chains'
 import { connectorsForWallets } from '@rainbow-me/rainbowkit'
 import {
   injectedWallet,
-  okxWallet,
   coinbaseWallet,
   walletConnectWallet,
-  rabbyWallet,
-  safepalWallet,
-  bitgetWallet,
-  bybitWallet,
-  coin98Wallet,
-  oneKeyWallet,
-  braveWallet,
 } from '@rainbow-me/rainbowkit/wallets'
 
 const connectors = connectorsForWallets(
   [
     {
-      groupName: '推荐',
-      wallets: [
-        injectedWallet,
-        okxWallet,
-        coinbaseWallet,
-        walletConnectWallet,
-      ],
-    },
-    {
-      groupName: '更多钱包',
-      wallets: [
-        rabbyWallet,
-        safepalWallet,
-        bitgetWallet,
-        bybitWallet,
-        coin98Wallet,
-        oneKeyWallet,
-        braveWallet,
-      ],
+      groupName: '连接钱包',
+      wallets: [injectedWallet, coinbaseWallet, walletConnectWallet],
     },
   ],
   {
