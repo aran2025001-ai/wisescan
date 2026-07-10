@@ -16,13 +16,13 @@ interface BusinessModelReport {
 
 export default function MyBusinessModels() {
   const navigate = useNavigate()
-  const { address, isConnected } = useAccount()
+  const { address } = useAccount()
   const [reports, setReports] = useState<BusinessModelReport[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const fetchReports = useCallback(async () => {
-    if (!isConnected || !address) {
+    if (!address) {
       setReports([])
       setLoading(false)
       return
@@ -30,6 +30,18 @@ export default function MyBusinessModels() {
 
     setLoading(true)
     setError(null)
+
+    // 先从 localStorage 加载缓存（秒开）
+    const cacheKey = `wisescan_mybiz_${address.toLowerCase()}`
+    try {
+      const cached = localStorage.getItem(cacheKey)
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setReports(parsed); setLoading(false)
+        }
+      }
+    } catch {}
 
     try {
       const { data, error: fetchError } = await supabase
@@ -59,7 +71,10 @@ export default function MyBusinessModels() {
             latestMap.set(key, clone)
           }
         }
-        setReports(Array.from(latestMap.values()))
+        const vals = Array.from(latestMap.values())
+        // 缓存到 localStorage（下次秒开）
+        try { localStorage.setItem(cacheKey, JSON.stringify(vals)) } catch {}
+        setReports(vals)
       }
     } catch (err: any) {
       console.error('获取报告异常:', err.message)
@@ -67,7 +82,7 @@ export default function MyBusinessModels() {
     } finally {
       setLoading(false)
     }
-  }, [address, isConnected])
+  }, [address])
 
   useEffect(() => {
     fetchReports()
@@ -140,7 +155,7 @@ export default function MyBusinessModels() {
           )}
 
           {/* Not Connected */}
-          {!loading && !error && !isConnected && (
+          {!loading && !error && !address && (
             <div className="flex flex-col items-center justify-center gap-3 py-12">
               <AlertCircle className="h-8 w-8 text-zinc-600" />
               <p className="text-center text-sm text-zinc-500">
@@ -150,7 +165,7 @@ export default function MyBusinessModels() {
           )}
 
           {/* Empty State */}
-          {!loading && !error && isConnected && reports.length === 0 && (
+          {!loading && !error && address && reports.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-3 py-12">
               <AlertCircle className="h-8 w-8 text-zinc-600" />
               <p className="text-center text-sm text-zinc-500">
@@ -174,7 +189,7 @@ export default function MyBusinessModels() {
                   <button
                     key={report.id}
                     onClick={() => handleCardClick(report)}
-                    className="w-full rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors border border-[#343438] cursor-pointer group text-left"
+                    className="w-full rounded-lg bg-zinc-800 hover:bg-zinc-700 active:scale-[0.98] active:brightness-110 transition-all duration-150 border border-[#343438] cursor-pointer group text-left"
                   >
                     <div className="grid grid-cols-1 gap-1 p-2">
                       {/* Top Row: Project Name + Arrow */}
@@ -192,7 +207,7 @@ export default function MyBusinessModels() {
                         <span className={`${pattern.color} rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap`}>
                           {pattern.label}
                         </span>
-                        <span className="text-[10px] text-zinc-400">
+                        <span className="text-[12px] text-zinc-400">
                           {formatDate(report.created_at)}
                         </span>
                       </div>

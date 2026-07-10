@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+﻿import { useState, useRef, useEffect } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { useAccount } from "wagmi"
 import { ChevronLeft, MessageCirclePlus, Mic, Keyboard, Send, AlertCircle, Gift, ChevronRight, Loader2 } from "lucide-react"
@@ -7,6 +7,7 @@ import DecomposeMethodologyModal from "@/components/DecomposeMethodologyModal"
 import ShareButton from "@/components/ShareButton"
 import { renderEvidenceTaggedText } from "@/utils/evidenceTags"
 import { TencentAsrClient } from "@/services/tencentAsr"
+import PaymentModal from "@/components/PaymentModal"
 
 interface Message {
   id: string
@@ -77,39 +78,77 @@ export default function BusinessBreakdown() {
   const { isConnected, address } = useAccount()
 
 
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('wisescan_biz_messages')
+      if (saved) {
+        const p = JSON.parse(saved)
+        if (Array.isArray(p) && p.length) {
+          // 恢复 timestamp 为 Date 对象，并确保 content 为字符串
+          return p.map(m => ({
+            ...m,
+            timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+            content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+          }))
+        }
+      }
+    } catch { /* 陈旧数据，忽略 */ }
+    return []
+  })
 
   const [inputValue, setInputValue] = useState("")
-  const [isVoiceMode, setIsVoiceMode] = useState(true)
+  const [isVoiceMode, setIsVoiceMode] = useState(false)
+  // 语音是否不可用（浏览器限制如 TP 钱包 WebView）
+  const voiceDisabled = !(typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia)
   const [isRecording, setIsRecording] = useState(false)
   const asrClientRef = useRef<TencentAsrClient | null>(null)  // 阶段六：腾讯云 ASR 客户端
-  const [asrError, ] = useState<string | null>(null)
+  const [asrError, setAsrError] = useState<string | null>(null)
+  const [toast, setToast] = useState('')
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [showBackConfirmModal, setShowBackConfirmModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [activeCouponAmount, setActiveCouponAmount] = useState(0)
+  const [activeCouponId, setActiveCouponId] = useState<string | undefined>(undefined)
   const [showMethodologyModal, setShowMethodologyModal] = useState(false)
   const [showAlertModal, setShowAlertModal] = useState(false)
   const [alertMsg, setAlertMsg] = useState("")
   const [localInviteCode, setLocalInviteCode] = useState<string>('')
   const [inviteCount, setInviteCount] = useState(0)  // 已成功邀请人数（>0 则隐藏邀请横幅）
   const paidKey = "wisescan_breakdown_unlocked"
-  const [isBreakdownPaid, setIsBreakdownPaid] = useState(() => localStorage.getItem(paidKey) === "true")
+  const [isBreakdownPaid, setIsBreakdownPaid] = useState(() => sessionStorage.getItem(paidKey) === "true")  // 付费状态持久化（刷新保留）
   // 阶段五：对话权限状态
   const [chatIsPaid, setChatIsPaid] = useState(isBreakdownPaid)
   const [conversationCount, setConversationCount] = useState(0)
   const [, setRemainingCount] = useState(5)
-  const [reportData, setReportData] = useState<any>(null)
+  const [reportData, setReportData] = useState<any>(() => {
+    try {
+      const saved = sessionStorage.getItem('wisescan_biz_report')
+      if (saved) return JSON.parse(saved)
+    } catch { /* 陈旧数据，忽略 */ }
+    return null
+  })
   const [_isGenerating, setIsGenerating] = useState(false)
   const hasResultsRef = useRef(false)
   const resultsCardIdRef = useRef<string | null>(null)
-  const [formData, setFormData] = useState({
-    projectName: "",
-    businessRule: "",
-    uploadedImages: "",
+  // ── 表单数据（切APP时 sessionStorage 兜底）──
+  const [formData, setFormData] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('wisescan_biz_form')
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return {
+      projectName: "",
+      businessRule: "",
+      uploadedImages: "",
+    }
   })
+  // ── 表单数据自动保存到 sessionStorage（切APP不丢失）──
+  useEffect(() => {
+    try { sessionStorage.setItem('wisescan_biz_form', JSON.stringify(formData)) } catch {}
+  }, [formData])
   const [businessImageFiles, setBusinessImageFiles] = useState<File[]>([])
-  const businessFileInputRef = useRef<HTMLInputElement>(null)
+  // 图片的 base64 预览 URL，用于稳定显示缩略图（不受页面重渲染影响）
+  const [imagePreviews, setImagePreviews] = useState<string[]>([])
 
   interface ResultsState {
     investmentAmount: number
@@ -130,23 +169,61 @@ export default function BusinessBreakdown() {
   const onboardingTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])  // 引导推送定时器（用于清理）
   const location = useLocation()
 
-  // 每次路由导航到本页时，强制滚回顶部
+  // 首次加载：无聊天历史 → 滚到表单位置；有交互记录 → 立即滚到底部
   useEffect(() => {
-    window.scrollTo(0, 0)
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = 0
+    if (isOnboardingRef.current) return
+    const hasActiveChat = messages.length > initialMessages().length
+    if (hasActiveChat) {
+      // 有交互记录 → 立即滚到底部（覆盖浏览器刷新默认）
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'instant', block: 'end' })
+      })
+    } else {
+      // 无交互记录 → 稍后滚到表单位置
+      const t = setTimeout(() => {
+        const formEl = document.querySelector('[data-message-id="4"]')
+        if (formEl) {
+          formEl.scrollIntoView({ behavior: 'instant', block: 'start' })
+        } else {
+          window.scrollTo(0, 0)
+        }
+      }, 100)
+      return () => clearTimeout(t)
     }
-  }, [location.key])
+  }, [])
 
-  // Redirect if wallet disconnected
+  // Redirect if wallet disconnected (仅从未在本会话连接过时才跳转)
   useEffect(() => {
-    if (!isConnected) {
-      navigate("/")
+    if (isConnected) {
+      sessionStorage.setItem('wisescan_wallet_connected', '1')
+      return
     }
+    const wasConnected = sessionStorage.getItem('wisescan_wallet_connected')
+    if (!wasConnected) navigate("/")
   }, [isConnected, navigate])
+
+  // Toast 自动消失
+  useEffect(() => {
+    if (toast) { const t = setTimeout(() => setToast(''), 2500); return () => clearTimeout(t) }
+  }, [toast])
 
   // 阶段五：同步对话付费状态
   useEffect(() => { setChatIsPaid(isBreakdownPaid) }, [isBreakdownPaid])
+
+  // 链上支付：页面加载时检查是否已付费（防止 sessionStorage 被清除后重复付）
+  useEffect(() => {
+    if (!isBreakdownPaid && address) {
+      fetch(`/api/check-payment?userAddress=${address}&reportType=business`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.isPaid) {
+            sessionStorage.setItem(paidKey, "true")
+            setIsBreakdownPaid(true)
+          }
+        })
+        .catch(() => {}) // 静默失败，不影响体验
+    }
+  }, [address])
 
   // 获取当前钱包地址的邀请码
   useEffect(() => {
@@ -156,7 +233,7 @@ export default function BusinessBreakdown() {
       .then(data => {
         if (data.code) setLocalInviteCode(data.code)
       })
-      .catch(() => {})
+      .catch((err) => console.error('[BusinessBreakdown] 获取邀请码失败:', err))
   }, [address])
 
   // 获取邀请次数（>0 则隐藏邀请横幅，终身一次）
@@ -165,7 +242,7 @@ export default function BusinessBreakdown() {
     fetch(`/api/invite/stats?user_address=${address}`)
       .then(r => r.json())
       .then(j => { if (j.invite_count !== undefined) setInviteCount(j.invite_count || 0) })
-      .catch(() => {})
+      .catch((err) => console.error('[BusinessBreakdown] 获取邀请统计失败:', err))
   }, [address])
 
   const scrollToBottom = () => {
@@ -203,14 +280,41 @@ export default function BusinessBreakdown() {
     scrollToBottom()
   }, [messages])
 
+  // 持久化：消息变化时保存到 sessionStorage
+  // 过滤掉非字符串 content 的消息（React 元素、对象等），避免下次加载报错
+  useEffect(() => {
+    if (messages.length > 0) {
+      const safe = messages.map(m => ({
+        ...m,
+        content: typeof m.content === 'string' ? m.content : '',
+      }))
+      sessionStorage.setItem('wisescan_biz_messages', JSON.stringify(safe))
+    }
+  }, [messages])
+
+  // 持久化：报告数据变化时保存
+  useEffect(() => {
+    if (reportData) {
+      sessionStorage.setItem('wisescan_biz_report', JSON.stringify(reportData))
+    }
+  }, [reportData])
+
   // 新用户引导：逐步推送消息，完成后恢复自动滚动
   useEffect(() => {
-    const onboarded = localStorage.getItem('wisescan_breakdown_onboarded') === 'true'
+    // 如果已有持久化的消息（用户回来继续聊），跳过引导
+    if (messages.length > 0) {
+      // review the content 是旧数据的恢复，不需要初始化消息
+      return
+    }
+
+    const onboarded = sessionStorage.getItem('wisescan_breakdown_onboarded') === 'true'
     const all = initialMessages()
 
     if (onboarded) {
-      // 老用户：直接全展示
-      setMessages(all)
+      // 老用户：直接全展示（避免重复 setMessages 触发 scrollToBottom）
+      if (messages.length !== all.length) {
+        setMessages(all)
+      }
     } else {
       // 新用户：逐步推送（每条间隔 2 秒）
       isOnboardingRef.current = true
@@ -279,6 +383,9 @@ export default function BusinessBreakdown() {
           user_address: address || undefined,
           conversation_count: conversationCount,
           is_paid: chatIsPaid,
+          page: 'business',
+          // 直接传递报告数据，确保即使 DB 保存失败 AI 也有数据可用
+          report_data: reportData || undefined,
         }),
       });
 
@@ -303,10 +410,10 @@ export default function BusinessBreakdown() {
       if (data.is_paid) setChatIsPaid(true)
       if (typeof data.remaining_count === 'number') setRemainingCount(data.remaining_count)
 
-      // 阶段五：递增 localStorage 对话计数
+      // 阶段五：递增 sessionStorage 对话计数
       const chatKey = contractAddr ? `wisescan_chat_${contractAddr}` : 'wisescan_breakdown_chat'
       const newCount = conversationCount + 1
-      localStorage.setItem(chatKey, String(newCount))
+      sessionStorage.setItem(chatKey, String(newCount))
       setConversationCount(newCount)
 
       setMessages((prev) => {
@@ -341,20 +448,32 @@ export default function BusinessBreakdown() {
   }
 
   const toggleInputMode = () => {
-    // 切换输入模式时清理 ASR
-    if (isVoiceMode && asrClientRef.current) {
-      asrClientRef.current.stopRecording()
-      asrClientRef.current = null
+    // 当前是语音模式 → 切到文字模式（键盘按钮始终可用）
+    if (isVoiceMode) {
+      if (asrClientRef.current) {
+        asrClientRef.current.stopRecording()
+        asrClientRef.current = null
+      }
+      setIsVoiceMode(false)
+      setInputValue("")
+      return
     }
-    setIsVoiceMode(!isVoiceMode)
+    // 当前是文字模式 → 尝试切到语音模式
+    if (voiceDisabled) {
+      // 语音不可用且已在文字模式 → 无需操作
+      return
+    }
+    setIsVoiceMode(true)
     setInputValue("")
   }
 
-  const handleVoiceStart = () => {
+  const handleVoiceStart = (e?: React.TouchEvent | React.MouseEvent | React.PointerEvent) => {
+    e?.preventDefault()
+    setAsrError(null)
     setIsRecording(true)
     const client = new TencentAsrClient({
       onResult: (_text) => { /* 语音模式下不更新输入框，松手自动发送 */ },
-      onError: (err) => { console.error('[ASR]', err); },
+      onError: (err) => { setAsrError(err); console.error('[ASR]', err); },
       onStart: () => setIsRecording(true),
       onEnd: (finalText) => {
         setIsRecording(false)
@@ -368,7 +487,8 @@ export default function BusinessBreakdown() {
     client.startRecording()
   }
 
-  const handleVoiceEnd = () => {
+  const handleVoiceEnd = (e?: React.TouchEvent | React.MouseEvent | React.PointerEvent) => {
+    e?.preventDefault()
     if (asrClientRef.current) {
       asrClientRef.current.stopRecording()
       asrClientRef.current = null
@@ -376,7 +496,20 @@ export default function BusinessBreakdown() {
   }
 
   const handleImageUpload = () => {
-    businessFileInputRef.current?.click()
+    // Android 多选兼容：动态创建 input 元素
+    // accept="image/*" 在手机上触发系统相册（漂亮的网格视图），比具体 MIME 列表更友好
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.multiple = true       // 先设 multiple 再设 accept，某些浏览器有顺序依赖
+    input.accept = 'image/*'
+    input.onchange = (e: Event) => {
+      const target = e.target as HTMLInputElement
+      if (target.files && target.files.length > 0) {
+        handleBusinessImageChange(e as unknown as React.ChangeEvent<HTMLInputElement>)
+      }
+      target.remove()
+    }
+    input.click()
   }
 
   const handleBusinessImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -389,43 +522,78 @@ export default function BusinessBreakdown() {
       setShowAlertModal(true)
       return
     }
-    const validTypes = ["image/jpeg", "image/png"]
-    // 重复校验：用 fileName + fileSize 作为唯一标识
-    const existingKeys = new Set(businessImageFiles.map(f => `${f.name}_${f.size}`))
-    const duplicateNames: string[] = []
-    const uniqueNewFiles: File[] = []
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]
+    // 先做基础校验（格式 + 大小）
+    let typeError = false
     for (const file of newFiles) {
       if (!validTypes.includes(file.type)) {
-        setAlertMsg(`⚠️ 文件格式不支持\n\n${file.name} 格式不支持，仅支持 JPG/PNG 格式。`)
+        setAlertMsg(`⚠️ 文件格式不支持\n\n${file.name} 格式不支持，仅支持 JPG/PNG/WebP 格式。`)
         setShowAlertModal(true)
-        return
+        typeError = true
+        break
       }
       if (file.size > 5 * 1024 * 1024) {
         setAlertMsg(`⚠️ 文件过大\n\n${file.name} 超过5MB限制，请压缩后重新上传。`)
         setShowAlertModal(true)
-        return
-      }
-      const key = `${file.name}_${file.size}`
-      if (existingKeys.has(key)) {
-        duplicateNames.push(file.name)
-      } else {
-        uniqueNewFiles.push(file)
-        existingKeys.add(key)
+        typeError = true
+        break
       }
     }
-    if (duplicateNames.length > 0) {
-      setAlertMsg(`⚠️ 文件已存在\n\n${duplicateNames.join(", ")} 已存在，已自动跳过重复文件。`)
-      setShowAlertModal(true)
-    }
-    if (uniqueNewFiles.length === 0) return
-    const updated = [...businessImageFiles, ...uniqueNewFiles]
-    setBusinessImageFiles(updated)
-    setFormData(prev => ({
-      ...prev,
-      uploadedImages: updated.map(f => f.name).join(", "),
-    }))
+    if (typeError) return
+
+    // 用 base64 前120字符做去重指纹（比 fileName+size+lastModified 更可靠）
+    // 同一张图片在不同手机上可能文件名不同，但 base64 内容相同
+    const existingFingerprints = new Set(
+      imagePreviews.map(p => p.slice(0, 120))
+    )
+    Promise.all(
+      newFiles.map(file => new Promise<{ file: File; b64: string }>((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve({ file, b64: reader.result as string })
+        reader.readAsDataURL(file)
+      }))
+    ).then(results => {
+      const duplicateNames: string[] = []
+      const uniqueFiles: File[] = []
+      const uniquePreviews: string[] = []
+      for (const { file, b64 } of results) {
+        const fp = b64.slice(0, 120)
+        if (existingFingerprints.has(fp)) {
+          duplicateNames.push(file.name)
+        } else {
+          uniqueFiles.push(file)
+          uniquePreviews.push(b64)
+          existingFingerprints.add(fp)
+        }
+      }
+      if (duplicateNames.length > 0) {
+        setAlertMsg(`⚠️ 图片已存在\n\n${duplicateNames.join(", ")} 已存在，已自动跳过。`)
+        setShowAlertModal(true)
+      }
+      if (uniqueFiles.length === 0) return
+      const updated = [...businessImageFiles, ...uniqueFiles]
+      setBusinessImageFiles(updated)
+      setImagePreviews(prev => [...prev, ...uniquePreviews])
+      setFormData(prev => ({
+        ...prev,
+        uploadedImages: updated.map(f => f.name).join(", "),
+      }))
+    })
     // 重置 input 值以支持重新选择同一文件
     e.target.value = ""
+  }
+
+  /** 删除单张已上传图片 */
+  const handleRemoveBusinessImage = (index: number) => {
+    setBusinessImageFiles(prev => {
+      const updated = prev.filter((_, i) => i !== index)
+      setFormData(fd => ({
+        ...fd,
+        uploadedImages: updated.map(f => f.name).join(", "),
+      }))
+      return updated
+    })
+    setImagePreviews(prev => prev.filter((_, i) => i !== index))
   }
 
   /** 判断输入是否无效：短且无意义，或纯符号/重复字符 */
@@ -440,6 +608,8 @@ export default function BusinessBreakdown() {
     if (cleaned.length < 5) return true
     return false
   }
+
+  const paidButPendingRef = useRef(false)  // 支付成功但报告尚未生成成功（失败可免费重试）
 
   const handleStartBreakdown = () => {
     const hasRule = formData.businessRule.trim().length > 0
@@ -459,6 +629,18 @@ export default function BusinessBreakdown() {
       return
     }
 
+    // 🏷️ 调试模式：跳过支付（VITE_SKIP_PAYMENT=true 时直接生成报告，不弹支付窗）
+    if (import.meta.env.VITE_SKIP_PAYMENT === 'true') {
+      handlePaymentSuccess()
+      return
+    }
+
+    // 💰 有未完成的支付（支付成功但报告生成失败）→ 免费重试
+    if (paidButPendingRef.current) {
+      generateResults()
+      return
+    }
+
     // 每次拆解都要付费，弹出支付确认弹窗
     // 同时查代金券
     setShowPaymentModal(true)
@@ -467,12 +649,14 @@ export default function BusinessBreakdown() {
       .then(data => {
         const activeCoupons = (data.coupons || []).filter((c: any) => c.status === 'active')
         if (activeCoupons.length > 0) {
-          setActiveCouponAmount(parseFloat(activeCoupons[0].amount) || 2.99)
+          setActiveCouponAmount(parseFloat(activeCoupons[0].amount) || 0)
+          setActiveCouponId(activeCoupons[0].id)
         } else {
           setActiveCouponAmount(0)
+          setActiveCouponId(undefined)
         }
       })
-      .catch(() => setActiveCouponAmount(0))
+      .catch((err) => { console.error('[BusinessBreakdown] 获取优惠券列表失败:', err); setActiveCouponAmount(0); setActiveCouponId(undefined) })
   }
 
   // 统一的生成逻辑（调用真实 API）
@@ -523,7 +707,7 @@ export default function BusinessBreakdown() {
         throw new Error(json?.error || `生成失败 (${res.status})`)
       }
 
-      const { data: reportBody, report_id } = json
+      const { data: reportBody, report_id, db_save_failed } = json
       // API 返回结构：{ success: true, data: { pattern_type, share_card, ... }, report_id }
       // 直接展开 data 内容，report_id 作为 id，project_name 从表单或 share_card 取
       setReportData({
@@ -531,8 +715,24 @@ export default function BusinessBreakdown() {
         id: report_id,
         project_name: formData.projectName || reportBody.share_card?.project_name || '未命名项目',
       })
+      // ✅ 报告成功生成 → 清除付费标记，下次点生成需重新付费
+      paidButPendingRef.current = false
+      sessionStorage.removeItem(paidKey)
+      setIsBreakdownPaid(false)
       // ✅ 首次拆解完成标记（老用户下次进入直接展示全部内容）
-      localStorage.setItem('wisescan_breakdown_onboarded', 'true')
+      sessionStorage.setItem('wisescan_breakdown_onboarded', 'true')
+
+      // ⚠️ DB 保存失败 → 不阻塞报告展示，只给提示
+      if (db_save_failed) {
+        setTimeout(() => {
+          setMessages(prev => [...prev, {
+            id: (Date.now() + 3).toString(),
+            type: "ai",
+            content: "⚠️ 提示：报告已成功生成，但保存到数据库时遇到问题（可能是网络波动）。报告内容仍可正常查看和使用，建议截图保存以防丢失。如果需要重新保存，可以再次点击「开始拆解」免费重试。",
+            timestamp: new Date(),
+          }])
+        }, 1200)
+      }
 
       // 移除 loading 消息，添加报告卡片
       setMessages(prev => {
@@ -579,44 +779,28 @@ export default function BusinessBreakdown() {
     }
   }
 
-  const handleConfirmPayment = async () => {
-    setShowPaymentModal(false)
-
-    // 消耗代金券（如果有的话）
-    try {
-      const coupRes = await fetch('/api/coupons/use', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_address: address }),
-      })
-      const coupData = await coupRes.json()
-      if (coupData.success && coupData.used > 0) {
-        console.log(`💳 商业模式拆解消耗代金券 ${coupData.amount} USDT (${coupData.used} 张)`)
-      }
-    } catch { /* 代金券消耗失败不影响报告生成 */ }
-
+  const handlePaymentSuccess = () => {
     hasResultsRef.current = true
-    localStorage.setItem(paidKey, "true")
-    setIsBreakdownPaid(true)
+    paidButPendingRef.current = true  // 支付成功，等待报告生成
     generateResults()
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   return (
-    <div className="text-white flex flex-col h-screen">
+    <div className="text-white flex flex-col h-[100dvh]">
       {/* Header */}
       <div className="sticky top-0 z-40 border-b border-[#343438] bg-black backdrop-blur">
         <div className="flex items-center justify-between px-4 py-2">
         <button 
           onClick={handleBackClick}
-          className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-zinc-800 transition-colors flex-shrink-0"
+          className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-zinc-800 active:bg-zinc-700 active:scale-[0.95] transition-all duration-150 flex-shrink-0"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
         <h1 className="text-sm font-semibold flex-1 text-center">商业模式拆解</h1>
         <button
           onClick={handleNewConversation}
-          className="flex items-center justify-center gap-1 hover:bg-zinc-800 rounded-lg transition-colors flex-shrink-0 px-2 py-1"
+          className="flex items-center justify-center gap-1 hover:bg-zinc-800 active:bg-zinc-700 active:scale-[0.95] rounded-lg transition-all duration-150 flex-shrink-0 px-2 py-1"
           title="开始新对话"
         >
           <MessageCirclePlus className="w-5 h-5" />
@@ -660,7 +844,7 @@ export default function BusinessBreakdown() {
                 <div className="flex flex-col gap-2 items-start">
                   <button 
                     onClick={() => setShowMethodologyModal(true)}
-                    className="min-w-[180px] px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-full text-sm font-semibold transition-colors"
+                    className="min-w-[180px] px-6 py-2.5 bg-blue-500 hover:bg-blue-600 active:bg-blue-400 active:scale-[0.97] text-white rounded-full text-sm font-semibold transition-all duration-150"
                   >
                     <span>{message.content}</span>
                   </button>
@@ -673,7 +857,7 @@ export default function BusinessBreakdown() {
                 <div className="flex flex-col gap-2 items-start w-full">
                   <button
                     onClick={handleStartBreakdown}
-                    className="min-w-[180px] px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-full text-sm font-semibold transition-colors"
+                    className="min-w-[180px] px-6 py-2.5 bg-blue-500 hover:bg-blue-600 active:bg-blue-400 active:scale-[0.97] text-white rounded-full text-sm font-semibold transition-all duration-150"
                   >
                     {message.content}
                   </button>
@@ -683,7 +867,7 @@ export default function BusinessBreakdown() {
                 </div>
               ) : message.isForm ? (
                 /* Form Message */
-                <div className="w-full bg-zinc-900 rounded-lg p-4 space-y-3">
+                <div className="w-full bg-zinc-800 rounded-lg p-4 space-y-3">
                   {/* Instructions */}
                   <div className="pb-1">
                     <span className="text-xs text-zinc-400 leading-snug">请尽可能完整地提供以下信息。您给得越详细，拆解和算账就越精准。</span>
@@ -697,7 +881,7 @@ export default function BusinessBreakdown() {
                       placeholder="输入项目名称"
                       value={formData.projectName}
                       onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
-                      className="w-full px-3 py-2 bg-zinc-800 text-white text-sm rounded border border-[#343438] placeholder:text-xs placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                      className="w-full px-3 py-2 bg-zinc-700 text-white text-sm rounded border border-[#343438] placeholder:text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                     />
                   </div>
 
@@ -708,20 +892,20 @@ export default function BusinessBreakdown() {
                       placeholder="复制粘贴项目推广规则文本，例如：投资100U起，每日分红1%，直推10%，间推5%，团队业绩达标额外2%"
                       value={formData.businessRule}
                       onChange={(e) => setFormData({ ...formData, businessRule: e.target.value })}
-                      className="w-full px-3 py-2 h-20 bg-zinc-800 text-white text-sm rounded border border-[#343438] placeholder:text-xs placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                      className="w-full px-3 py-2 h-20 bg-zinc-700 text-white text-sm rounded border border-[#343438] placeholder:text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
                     />
                   </div>
 
                   {/* Image Upload — matches RiskAssessment style */}
                   <div className="space-y-1">
                     <label className="text-sm text-white">上传图片/截图</label>
-                    <div className="flex items-center gap-0 bg-zinc-800 border border-[#343438] rounded px-3 py-2">
+                    <div className="flex items-center gap-0 bg-zinc-700 border border-[#343438] rounded px-3 py-2">
                       <input
                         type="text"
                         placeholder="可上传商业模式宣传海报、规则说明等"
                         value={formData.uploadedImages}
                         readOnly
-                        className="flex-1 bg-transparent text-white text-sm placeholder:text-xs placeholder-zinc-600 focus:outline-none"
+                        className="flex-1 bg-transparent text-white text-sm placeholder:text-xs placeholder-zinc-500 focus:outline-none"
                       />
                       <button
                         onClick={handleImageUpload}
@@ -730,7 +914,33 @@ export default function BusinessBreakdown() {
                         上传
                       </button>
                     </div>
-                    <span className="text-xs text-zinc-500">最多5张，支持 JPG、PNG，单张不超过5MB</span>
+
+                    {/* 图片缩略图预览 */}
+                    {imagePreviews.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {imagePreviews.map((preview, idx) => (
+                          <div key={idx} className="relative">
+                            <img
+                              src={preview}
+                              alt={`图片${idx + 1}`}
+                              className="w-16 h-16 object-cover rounded border border-zinc-600 bg-zinc-800"
+                            />
+                            {/* 删除按钮：默认半透明（兼容手机触摸），hover/点击时全显 */}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveBusinessImage(idx)}
+                              className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] opacity-60 hover:opacity-100 active:opacity-100 transition-opacity"
+                              style={{ lineHeight: 0 }}
+                              aria-label="删除图片"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <span className="text-xs text-zinc-500">最多5张，支持 JPG/PNG/WebP/HEIC，单张不超过5MB，可多选</span>
                   </div>
 
                   {/* Security Warning */}
@@ -766,7 +976,7 @@ export default function BusinessBreakdown() {
                       <ShareButton
                         inviteCode={localInviteCode}
                         trigger={
-                          <div className="w-full px-4 py-2.5 flex items-center gap-3 bg-gradient-to-r from-blue-950/50 to-purple-950/50 hover:bg-zinc-700 transition-colors">
+                          <div className="w-full px-4 py-2.5 flex items-center gap-3 bg-gradient-to-r from-blue-950/50 to-purple-950/50 hover:bg-zinc-700 active:scale-[0.98] active:brightness-110 transition-all duration-150">
                             <Gift className="w-5 h-5 flex-shrink-0 text-blue-400" />
                             <div className="flex-1">
                               <div className="text-sm text-zinc-200">邀请一位朋友，立得 2.99U 代金券</div>
@@ -781,7 +991,7 @@ export default function BusinessBreakdown() {
                   ) : (
                     /* Regular message */
                     <div
-                      className={`px-4 py-2 rounded-lg text-sm leading-relaxed whitespace-pre-wrap ${
+                      className={`px-4 py-2 rounded-lg text-sm leading-relaxed whitespace-pre-wrap break-all max-w-full overflow-hidden ${
                         message.type === "ai"
                           ? "bg-zinc-800 text-zinc-200"
                           : "bg-green-500 text-white"
@@ -789,7 +999,9 @@ export default function BusinessBreakdown() {
                     >
                       {message.type === "ai" && typeof message.content === "string"
                         ? renderEvidenceTaggedText(message.content, "text-sm leading-relaxed")
-                        : message.content}
+                        : typeof message.content === "string"
+                          ? message.content
+                          : JSON.stringify(message.content)}
                     </div>
                   )}
                 </div>
@@ -797,7 +1009,7 @@ export default function BusinessBreakdown() {
 
               {!message.isForm && !message.isScanButton && (
                 <span className="text-xs text-zinc-600 px-2">
-                  {message.timestamp.toLocaleTimeString("zh-CN", {
+                  {new Date(message.timestamp).toLocaleTimeString("zh-CN", {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
@@ -811,15 +1023,28 @@ export default function BusinessBreakdown() {
 
       {/* Input Area */}
       <div className="border-t border-[#343438] bg-black p-4">
+        {/* ASR 错误提示（仅在语音模式显示，放在按钮行上方） */}
+        {asrError && isVoiceMode && (
+          <div className="mb-2 px-3 py-1.5 bg-zinc-800/80 border border-zinc-700 rounded-md text-zinc-300 text-xs text-center">
+            ⚠️ {asrError}
+          </div>
+        )}
+
         {/* 输入区（始终可用） */}
         <div className="flex items-center gap-2">
           {/* Mode Toggle Button */}
           <button
             onClick={toggleInputMode}
-            className="flex-shrink-0 p-2 rounded-lg bg-zinc-700 text-zinc-400 hover:bg-zinc-600 transition-colors"
-            title={isVoiceMode ? "切换到文字输入" : "切换到语音输入"}
+            className={`flex-shrink-0 p-3 rounded-lg transition-all duration-150 ${
+              voiceDisabled && !isVoiceMode
+                ? 'bg-zinc-800 text-zinc-500 cursor-default'
+                : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600 active:bg-zinc-500 active:scale-[0.95]'
+            }`}
+            title={voiceDisabled && !isVoiceMode ? '当前浏览器不支持语音输入' : (isVoiceMode ? '切换到文字输入' : '切换到语音输入')}
           >
-            {isVoiceMode ? (
+            {voiceDisabled && !isVoiceMode ? (
+              <Keyboard className="w-5 h-5" />
+            ) : isVoiceMode ? (
               <Keyboard className="w-5 h-5" />
             ) : (
               <Mic className="w-5 h-5" />
@@ -828,6 +1053,10 @@ export default function BusinessBreakdown() {
 
           {isVoiceMode ? (
             <button
+              onTouchStart={handleVoiceStart}
+              onTouchEnd={handleVoiceEnd}
+              onMouseDown={handleVoiceStart}
+              onMouseUp={handleVoiceEnd}
               onPointerDown={handleVoiceStart}
               onPointerUp={handleVoiceEnd}
               className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all text-sm ${
@@ -849,7 +1078,7 @@ export default function BusinessBreakdown() {
                 }
               }}
               placeholder="输入补充说明..."
-              className="flex-1 px-4 py-2 bg-zinc-700 text-white rounded-lg text-sm placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+              className="flex-1 px-4 py-3 bg-zinc-700 text-white rounded-lg text-sm placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
             />
           )}
 
@@ -858,7 +1087,7 @@ export default function BusinessBreakdown() {
             <button
               onClick={() => handleSendMessage()}
               disabled={!inputValue.trim()}
-              className={`flex-shrink-0 p-2 rounded-lg transition-colors ${
+              className={`flex-shrink-0 p-3 rounded-lg transition-colors ${
                 inputValue.trim()
                   ? "bg-blue-500 text-white hover:bg-blue-600"
                   : "bg-zinc-700 text-zinc-500 cursor-not-allowed"
@@ -870,17 +1099,17 @@ export default function BusinessBreakdown() {
           )}
         </div>
 
-        {/* ASR 错误提示 */}
-        {asrError && (
-          <div className="mx-4 mt-2 p-2 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-xs text-center">
-            ⚠️ {asrError}
+        {/* Toast 提示 */}
+        {toast && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[999999] px-4 py-2 bg-zinc-800/95 border border-zinc-700 rounded-lg text-zinc-200 text-xs shadow-xl whitespace-nowrap">
+            {toast}
           </div>
         )}
       </div>
 
       {/* Confirm Modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999]">
           <div className="bg-zinc-900 rounded-lg p-4 w-80 mx-4 space-y-3 border border-[#343438]">
             <h2 className="text-white font-semibold text-sm text-center">新建对话</h2>
             <p className="text-zinc-300 text-xs leading-relaxed">
@@ -889,7 +1118,7 @@ export default function BusinessBreakdown() {
             <div className="flex gap-3 pt-1">
               <button
                 onClick={() => setShowConfirmModal(false)}
-                className="flex-1 py-1.5 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-xs"
+                className="flex-1 py-3 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-sm"
               >
                 取消
               </button>
@@ -897,10 +1126,14 @@ export default function BusinessBreakdown() {
                 onClick={() => {
                   setShowConfirmModal(false)
                   // 🔒 退出当前话题 → 支付记录归零
-                  localStorage.removeItem(paidKey)
+                  sessionStorage.removeItem(paidKey)
+                  sessionStorage.removeItem('wisescan_biz_messages')
+                  sessionStorage.removeItem('wisescan_biz_report')
+                  sessionStorage.removeItem('wisescan_biz_count')
                   setIsBreakdownPaid(false)
                   // 清空表单和上传的图片
                   setFormData({ projectName: "", businessRule: "", uploadedImages: "" })
+                  sessionStorage.removeItem('wisescan_biz_form')
                   setBusinessImageFiles([])
                   // 清理引导推送定时器（防止重复消息）
                   onboardingTimersRef.current.forEach(clearTimeout)
@@ -908,7 +1141,7 @@ export default function BusinessBreakdown() {
                   isOnboardingRef.current = false
                   setMessages(initialMessages())
                   setInputValue("")
-                  setIsVoiceMode(true)
+                  setIsVoiceMode(false)
                   setIsRecording(false)
                   if (asrClientRef.current) { asrClientRef.current.stopRecording(); asrClientRef.current = null }
                   hasResultsRef.current = false
@@ -931,47 +1164,25 @@ export default function BusinessBreakdown() {
         </div>
       )}
 
-      {/* Payment Confirm Modal */}
+      {/* 链上 USDT 支付弹窗 */}
       {showPaymentModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-zinc-900 rounded-lg p-4 w-80 mx-4 space-y-3 border border-[#343438]">
-            <h2 className="text-white font-semibold text-sm text-center">开始拆解</h2>
-            <p className="text-zinc-300 text-xs leading-relaxed">
-              将为您生成商业模式拆解报告，需支付 5.99 USDT（当前仅支持BSC链（BEP20）支付）。是否继续？
-            </p>
-            {activeCouponAmount > 0 && (
-              <div className="bg-zinc-800/70 rounded-lg p-2.5 border border-blue-500/20">
-                <p className="text-blue-400 text-xs font-medium">🎟️ 检测到代金券</p>
-                <p className="text-zinc-400 text-[11px] mt-1">
-                  您有 <span className="text-blue-400 font-semibold">{activeCouponAmount} USDT</span> 代金券，
-                  可抵扣部分费用（原价 <span className="text-zinc-300">5.99 USDT</span>）。
-                </p>
-                <p className="text-zinc-500 text-[10px] mt-1">
-                  确认后将自动使用代金券，仍需支付 {Math.max(0, 5.99 - activeCouponAmount).toFixed(2)} USDT
-                </p>
-              </div>
-            )}
-            <div className="flex gap-3 pt-1">
-              <button
-                onClick={() => setShowPaymentModal(false)}
-                className="flex-1 py-1.5 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-xs"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleConfirmPayment}
-                className="flex-1 py-1.5 px-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs"
-              >
-                确认
-              </button>
-            </div>
-          </div>
-        </div>
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          reportType="business"
+          price={5.99}
+          projectId={undefined}
+          projectName={formData.projectName || undefined}
+          userAddress={address || ''}
+          couponAmount={activeCouponAmount > 0 ? activeCouponAmount : undefined}
+          couponId={activeCouponId}
+          onPaymentSuccess={handlePaymentSuccess}
+        />
       )}
 
       {/* Back Confirm Modal */}
       {showBackConfirmModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999]">
           <div className="bg-zinc-900 rounded-lg p-4 w-80 mx-4 space-y-3 border border-[#343438]">
             <h2 className="text-white font-semibold text-sm text-center">退出商业模式拆解</h2>
             <p className="text-zinc-300 text-xs leading-relaxed">
@@ -980,7 +1191,7 @@ export default function BusinessBreakdown() {
             <div className="flex gap-3 pt-1">
               <button
                 onClick={() => setShowBackConfirmModal(false)}
-                className="flex-1 py-1.5 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-xs"
+                className="flex-1 py-3 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-sm"
               >
                 取消
               </button>
@@ -988,10 +1199,14 @@ export default function BusinessBreakdown() {
                 onClick={() => {
                   setShowBackConfirmModal(false)
                   // 🔒 退出当前话题 → 支付记录归零
-                  localStorage.removeItem(paidKey)
+                  sessionStorage.removeItem(paidKey)
+                  sessionStorage.removeItem('wisescan_biz_messages')
+                  sessionStorage.removeItem('wisescan_biz_report')
+                  sessionStorage.removeItem('wisescan_biz_count')
                   setIsBreakdownPaid(false)
                   // 清空表单和上传的图片
                   setFormData({ projectName: "", businessRule: "", uploadedImages: "" })
+                  sessionStorage.removeItem('wisescan_biz_form')
                   setBusinessImageFiles([])
                   navigate("/home")
                 }}
@@ -1034,16 +1249,7 @@ export default function BusinessBreakdown() {
           </div>
         </div>
       )}
-
-      {/* Hidden file input for business rule image upload */}
-      <input
-        ref={businessFileInputRef}
-        type="file"
-        accept="image/jpeg,image/png"
-        multiple
-        className="hidden"
-        onChange={handleBusinessImageChange}
-      />
+      {/* 已改用动态创建 input 的方式（handleImageUpload），不再保留隐藏 input */}
     </div>
   )
 }

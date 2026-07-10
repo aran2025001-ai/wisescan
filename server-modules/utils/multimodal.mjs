@@ -131,7 +131,7 @@ export async function analyzeImageBase64(base64Data, mimeType = 'image/png') {
             content: [
               {
                 type: 'text',
-                text: `请详细描述这张图片的内容，提取所有可读文字和关键视觉信息。请用中文输出，结构清晰，不少于50字。`,
+                text: `请精确提取这张图片中的所有可读文字和数字，不要推测、不要补充、不要计算。按原始顺序列出所有可见文本内容。如果看到百分比、金额、时间等数值，只照抄原文，不要推算或补全任何缺失数据。请用中文输出。`,
               },
               {
                 type: 'image_url',

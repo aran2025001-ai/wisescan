@@ -55,11 +55,19 @@ export default function Home() {
       .catch(() => {})
   }, [])
 
-  // 钱包断开时重定向到欢迎页
+  // 钱包断开时重定向到欢迎页（仅当从未在本会话中连接过）
   useEffect(() => {
-    if (!isConnected) {
+    if (isConnected) {
+      sessionStorage.setItem('wisescan_wallet_connected', '1')
+      return
+    }
+    // 断开了 → 检查是否本会话曾连接过
+    const wasConnected = sessionStorage.getItem('wisescan_wallet_connected')
+    if (!wasConnected) {
+      // 从未连接过 → 正常跳欢迎页
       navigate("/")
     }
+    // 曾连接过 → 可能是暂态（后退/重载），不跳转等 wagmi 恢复
   }, [isConnected, navigate])
 
   const handleFeatureClick = (feature: typeof features[number]) => {
@@ -136,14 +144,14 @@ export default function Home() {
 
       {/* 退出钱包确认弹窗 */}
       {isLogoutModalOpen && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setIsLogoutModalOpen(false)}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999]" onClick={() => setIsLogoutModalOpen(false)}>
           <div className="bg-zinc-900 rounded-lg p-4 w-80 mx-4 space-y-3 border border-[#343438]" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-white font-semibold text-sm text-center">退出钱包</h2>
             <p className="text-zinc-300 text-xs leading-relaxed text-left">确认要退出当前钱包吗？退出后需要重新连接才能使用明鉴。</p>
             <div className="flex gap-3 pt-1">
               <button
                 onClick={() => setIsLogoutModalOpen(false)}
-                className="flex-1 py-1.5 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-xs"
+                className="flex-1 py-3 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-sm"
               >
                 取消
               </button>

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useAccount } from 'wagmi'
 import RiskReportCard from '../components/RiskReportCard'
+import PaymentModal from '../components/PaymentModal'
 import { ChevronLeft, Check } from 'lucide-react'
 
 const getRiskBadge = (level: number) => {
@@ -29,6 +30,8 @@ export default function ReportDetail() {
   const [_loadingData, setLoadingData] = useState(true)
   const [isAnalyzeModalOpen, setIsAnalyzeModalOpen] = useState(false)
   const [isUpdateRiskModalOpen, setIsUpdateRiskModalOpen] = useState(false)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [paymentPrice, setPaymentPrice] = useState(1.0)
   const [showPaymentResult, setShowPaymentResult] = useState(false)
   const [paymentResultMsg, setPaymentResultMsg] = useState("")
 
@@ -172,7 +175,7 @@ export default function ReportDetail() {
             <p className="text-zinc-300 text-xs leading-relaxed">根据全网最新信息将重新生成该项目的风险报告，需支付1 USDT（BSC链），是否继续？</p>
             <div className="flex gap-3 pt-1">
               <button onClick={() => setIsUpdateRiskModalOpen(false)} className="flex-1 py-1.5 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-xs">取消</button>
-              <button onClick={() => { setIsUpdateRiskModalOpen(false); setPaymentResultMsg("正在更新全景风险报告。"); setShowPaymentResult(true); handleGenerateRiskReport() }} className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-xs">确定</button>
+              <button onClick={() => { setIsUpdateRiskModalOpen(false); setPaymentPrice(1.0); setShowPaymentModal(true) }} className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-xs">确定</button>
             </div>
           </div>
         </div>
@@ -187,6 +190,24 @@ export default function ReportDetail() {
           </div>
         </div>,
         document.body
+      )}
+
+      {/* PaymentModal */}
+      {showPaymentModal && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          onPaymentSuccess={() => {
+            setShowPaymentModal(false)
+            setPaymentResultMsg("正在更新全景风险报告。")
+            setShowPaymentResult(true)
+            handleGenerateRiskReport()
+          }}
+          price={paymentPrice}
+          reportType="risk"
+          userAddress={address || ''}
+          priceType="update"
+        />
       )}
     </div>
   )

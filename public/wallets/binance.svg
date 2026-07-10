@@ -1,0 +1,14 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none'>
+  <defs>
+    <linearGradient id='bnb-bg' x1='0%' y1='0%' x2='100%' y2='100%'>
+      <stop offset='0%' stop-color='#F0B90B'/>
+      <stop offset='100%' stop-color='#F8D12F'/>
+    </linearGradient>
+  </defs>
+  <circle cx='32' cy='32' r='32' fill='#0B0E11'/>
+  <g transform='translate(14, 14)'>
+    <path d='M17.5365 19.0676L18 18.6041L23.8669 24.4646L18 30.325L17.5624 29.8876L12.1331 24.4646L17.9999 18.6041L17.5365 19.0676Z' fill='url(#bnb-bg)' transform='translate(-2, -2) scale(1.15)'/>
+    <path d='M18 0L28.5059 10.497L24.4717 14.5278L18 8.06176L11.5283 14.5278L7.49408 10.497L18 0Z' fill='url(#bnb-bg)' transform='translate(0, 0)'/>
+    <path d='M7.49408 38.503L18 48L28.5059 37.503L24.4717 33.4722L18 39.9382L11.5283 33.4722L7.49408 37.503Z' fill='url(#bnb-bg)' transform='translate(0, -2)'/>
+  </g>
+</svg>

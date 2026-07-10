@@ -53,7 +53,7 @@ export function generateComprehensiveReview(data: NormalizedReport): string {
       strengths.push(`已完成 ${firms[0]} 审计`)
     } else if (codeDim.score >= 18) {
       strengths.push('已完成审计')
-    } else if (codeDim.deduction.includes('未审计') || codeDim.score <= 8) {
+    } else if ((codeDim.deduction.includes('未审计') && !/无未审计/.test(codeDim.deduction)) || codeDim.score <= 8) {
       regularRisks.push('尚未完成审计')
     }
   }
@@ -69,11 +69,15 @@ export function generateComprehensiveReview(data: NormalizedReport): string {
     strengths.push('获机构融资')
   }
 
-  // --- LP 锁仓 ---
+  // --- LP 锁仓（修复：排除否定表述）---
   const lpLockDetail = data.onChainData?.goplus?.lpLockInfo
-  if (data.liquidity_lock === '已锁定' || (lpLockDetail !== null && lpLockDetail !== undefined && lpLockDetail !== '')) {
+  const lpLockStatus = data.onChainData?.goplus?.lpLockStatus || data.liquidity_lock
+  const isLpLocked = lpLockStatus === '已锁定' ||
+                     (String(lpLockDetail || '').toLowerCase().includes('锁定至') || 
+                      /已锁|锁仓|locked(?!\s*not)/i.test(String(lpLockDetail || '')))
+  if (data.liquidity_lock === '已锁定' || isLpLocked) {
     if (lpLockDetail) {
-      const yearMatch = lpLockDetail.match(/(\d{4})\s*年/)
+      const yearMatch = String(lpLockDetail).match(/(\d{4})\s*年/)
       if (yearMatch) {
         strengths.push(`LP 锁定至 ${yearMatch[1]} 年`)
       } else {
@@ -84,11 +88,13 @@ export function generateComprehensiveReview(data: NormalizedReport): string {
     }
   }
 
-  // --- 团队 ---
+  // --- 团队（修复：排除否定语境）---
   if (teamDim) {
-    if (teamDim.deduction.includes('匿名') || teamDim.score <= 8) {
+    const isAnonymous = /[^非不未无]匿名|完全匿名/.test(teamDim.deduction) && !/非?不?匿名/.test(teamDim.deduction?.replace(/未发现[^。]*]/g, ''))
+    const hasRealName = /已实名|已完成实名|实名认证.*通过|实名可查/.test(teamDim.deduction)
+    if (teamDim.deduction.includes('匿名') && !/未发现|无.*匿名|非匿名|不匿名/.test(teamDim.deduction) && teamDim.score <= 8) {
       criticalMarkers.push('团队完全匿名')
-    } else if (teamDim.deduction.includes('实名') || teamDim.score >= 16) {
+    } else if (hasRealName || teamDim.score >= 16) {
       strengths.push('团队实名可查')
     }
   }
@@ -106,7 +112,7 @@ export function generateComprehensiveReview(data: NormalizedReport): string {
   let top10Percent = 0
   if (top10Raw.includes('极高')) top10Percent = 90
   else if (top10Raw.includes('偏高')) top10Percent = 70
-  else if (top10Raw.includes('正常')) top10Percent = 30
+  else if (!/非正常|不正常/.test(top10Raw) && top10Raw.includes('正常')) top10Percent = 30
   else {
     const numMatch = top10Raw.match(/(\d+)/)
     if (numMatch) top10Percent = parseInt(numMatch[1], 10)
@@ -131,8 +137,10 @@ export function generateComprehensiveReview(data: NormalizedReport): string {
     }
   }
 
-  // --- 资金出金障碍 ---
-  if (histDim?.deduction.includes('出金') || histDim?.deduction.includes('资金障碍')) {
+  // --- 资金出金障碍（修复：排除"无出金障碍"等否定表述）---
+  const hasWithdrawalIssue = /出金.*(?:困难|障碍|限制|冻结|停止)/.test(histDim?.deduction || '') && 
+                              !/无.*出金.*(?:困难|障碍|限制)|无.*用户举报|无.*资金.*锁定/.test(histDim?.deduction || '')
+  if (hasWithdrawalIssue) {
     criticalMarkers.push('资金出金障碍记录')
   }
 

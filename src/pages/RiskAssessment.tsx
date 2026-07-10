@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react"
+﻿import { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import RadarChart from "../components/RadarChart"
 import ScanMethodologyModal from "../components/ScanMethodologyModal"
@@ -22,7 +22,7 @@ function generateShortReview(reportData: any): string {
   const codeDim = dims.find((d: any) => d.dimension?.includes('代码'))
   if (codeDim) {
     if (codeDim.score >= 18 || codeDim.deduction?.includes('无扣分')) positives.push('已完成审计')
-    else if (codeDim.score <= 8 || codeDim.deduction?.includes('未审计')) negatives.push('尚未完成审计')
+    else if (codeDim.score <= 8 || (codeDim.deduction?.includes('未审计') && !/无未审计/.test(codeDim.deduction))) negatives.push('尚未完成审计')
   }
   const funding = reportData.funding_record
   if (funding && funding !== '未知' && funding !== '无' && funding !== '--') positives.push('有融资记录')
@@ -30,10 +30,11 @@ function generateShortReview(reportData: any): string {
   const lp = reportData.onChainData?.goplus?.lpLockStatus || reportData.liquidity_lock
   if (lp === '已锁定') positives.push('LP已锁定')
   const teamDim = dims.find((d: any) => d.dimension?.includes('团队'))
-  if (teamDim?.deduction?.includes('匿名') || teamDim?.score <= 8) negatives.push('团队匿名')
+  if ((teamDim?.deduction?.includes('匿名') && !/未发现|无.*匿名|非匿名|不匿名/.test(teamDim.deduction)) || (teamDim?.score ?? 20) <= 8) negatives.push('团队匿名')
   const histDim = dims.find((d: any) => d.dimension?.includes('历史'))
-  if (histDim?.deduction?.includes('变更')) {
-    const changes = (reportData.history_mode_changes || '').toString()
+  const changes = (reportData.history_mode_changes || '').toString().trim()
+  const hasModeChange = changes && changes !== '无' && changes !== '0' && changes !== '0次' && !changes.startsWith('无')
+  if (hasModeChange || (histDim?.deduction && /模式变更\d+次|模式变更≥\d+次|变更\d+次/.test(histDim.deduction))) {
     const changeCount = parseInt(changes)
     if (!Number.isNaN(changeCount) && changeCount >= 2) negatives.push(`曾有过${changeCount}次模式变更`)
     else negatives.push('曾有过模式变更')
@@ -49,10 +50,10 @@ function generateShortReview(reportData: any): string {
   return `${negPart}，建议深入评估。`
 }
 
-import {
-  ChevronLeft, MessageCirclePlus, Mic, Keyboard, Send,
+import { ChevronLeft, MessageCirclePlus, Mic, Keyboard, Send,
   AlertCircle
 } from "lucide-react"
+import PaymentModal from "../components/PaymentModal"
 
 interface Message {
   id: string
@@ -167,8 +168,19 @@ function RiskReportCard({
           { dimension: "合规性与法律风险", score: 5, max: 10, deduction: "无法律实体" },
         ]
   )
-  const totalScore = reportData?.total_score ?? 45
-  const hasRealTotalScore = typeof reportData?.total_score === 'number' && !Number.isNaN(reportData.total_score)
+  const totalScore = (() => {
+    // 1. 从六个维度自动计算总分（最可靠，和展示保持一致）
+    const dimScores = dimensions.map(d => d.score)
+    const dimSum = dimScores.reduce((a, b) => a + b, 0)
+    if (dimSum > 0) return dimSum
+    // 2. 维度无数据时使用 API 返回的 total_score
+    if (typeof reportData?.total_score === 'number' && reportData.total_score > 0) {
+      return Math.round(reportData.total_score)
+    }
+    // 3. 无可信数据 → fallback
+    return 45
+  })()
+  const hasRealTotalScore = totalScore > 0
   const riskLevel = reportData?.risk_level || "高风险"
   const conclusion = reportData?.conclusion || "不建议参与"
 
@@ -233,26 +245,6 @@ function RiskReportCard({
         <p className="text-zinc-400 text-xs mt-1">明鉴·风险洞察官出品</p>
       </div>
 
-      {/* 🚨 恶意特征警告横幅 */}
-      {(reportData as any)?.malicious_features?.detected && (
-        <div className="bg-red-900/30 border-b border-red-500/50 px-4 py-3">
-          <div className="flex items-start gap-2">
-            <span className="text-red-500 text-lg leading-none mt-0.5">🚨</span>
-            <div>
-              <div className="text-red-400 font-semibold text-xs">检测到恶意特征</div>
-              <div className="text-zinc-300 text-[11px] mt-0.5">
-                该项目存在以下恶意特征：{((reportData as any).malicious_features.features || []).join('、')}
-              </div>
-              {(reportData as any).malicious_features.evidence && (
-                <div className="text-zinc-500 text-[10px] mt-1 leading-relaxed">
-                  {(reportData as any).malicious_features.evidence}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* 项目基本情报 — 复用 ProjectInfoCard */}
       <div className="px-4 py-3 border-b border-[#343438] bg-zinc-800/30">
         <ProjectInfoCard
@@ -291,7 +283,18 @@ function RiskReportCard({
             <p className={`text-xs mb-1 ${hasScore ? 'text-zinc-300' : 'text-[#6B7280]'}`}>
               得分：{hasScore ? `${item.score} / ${item.max}` : `— / ${item.max}`}
             </p>
-            <p className="text-zinc-400 text-xs">扣分项：{item.deduction || "无"}</p>
+            <p className="text-zinc-400 text-xs">扣分项：{(() => {
+              const d = item.deduction || "无"
+              // 截断超长扣分描述：只显示前2条要点（按中文分号分割）
+              if (d.length > 60) {
+                const parts = d.split(/[；;]/).filter(Boolean)
+                if (parts.length > 2) {
+                  return parts.slice(0, 2).join('；') + `…等${parts.length}项`
+                }
+                return d.substring(0, 80) + '…'
+              }
+              return d
+            })()}</p>
           </div>
         )})}
         {dimensions.every(d => typeof d.score !== 'number' || Number.isNaN(d.score)) && (
@@ -334,6 +337,26 @@ function RiskReportCard({
           </p>
         </div>
       </div>
+
+      {/* 🚨 恶意特征警告横幅 */}
+      {(reportData as any)?.malicious_features?.detected && (
+        <div className="bg-red-900/30 border-t border-b border-red-500/50 px-4 py-3">
+          <div className="flex items-start gap-2">
+            <span className="text-red-500 text-lg leading-none mt-0.5">🚨</span>
+            <div>
+              <div className="text-red-400 font-semibold text-xs">检测到恶意特征</div>
+              <div className="text-zinc-300 text-[11px] mt-0.5">
+                该项目存在以下恶意特征：{((reportData as any).malicious_features.features || []).join('、')}
+              </div>
+              {(reportData as any).malicious_features.evidence && (
+                <div className="text-zinc-500 text-[10px] mt-1 leading-relaxed">
+                  {(reportData as any).malicious_features.evidence}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 综合解读 */}
       <div className="px-4 py-3 border-t border-[#343438] bg-zinc-800/30">
@@ -432,9 +455,25 @@ export default function RiskAssessment() {
   const location = useLocation()
   const { isConnected, address } = useAccount()
 
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('wisescan_risk_messages')
+      const parsed = saved ? JSON.parse(saved) : null
+      if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+        return parsed
+          // 🛡️ 过滤已损坏的消息：只有 content 和 cardData 都为空时才丢弃
+          .filter((m: any) => !(m.content === '' && !m.cardData))
+          .map((m: any) => ({
+            ...m,
+            content: typeof m.content === 'string' ? m.content : '',
+            timestamp: new Date(m.timestamp),
+          }))
+      }
+    } catch { /* ignore */ }
+    return []
+  })
   const [inputValue, setInputValue] = useState("")
-  const [isVoiceMode, setIsVoiceMode] = useState(true)
+  const [isVoiceMode, setIsVoiceMode] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [asrError, setAsrError] = useState<string | null>(null)
   const asrClientRef = useRef<TencentAsrClient | null>(null)  // 阶段六：腾讯云 ASR 客户端
@@ -450,25 +489,39 @@ export default function RiskAssessment() {
   const [searchResults, setSearchResults] = useState<Array<{ address: string; name: string; symbol: string; chainId: string }>>([])
   const [searching, setSearching] = useState(false)
   const paidKey = "wisescan_assessment_unlocked"
-  const [isReportPaid, setIsReportPaid] = useState(false)
+  // 获取当前合约地址对应的专属付费 key（实现按项目付费，不串）
+  const getProjectPaidKey = (addr: string) => addr ? `wisescan_paid_${addr.toLowerCase()}` : paidKey
+  const [isReportPaid, setIsReportPaid] = useState(() => {
+    try { return sessionStorage.getItem(paidKey) === 'true' } catch { return false }
+  })
   // 对话权限状态（阶段五：免费 vs 付费）
   const [chatIsPaid, setChatIsPaid] = useState(false)
   const [conversationCount, setConversationCount] = useState(0)
   const [, setRemainingCount] = useState(5)
   const [reportData, setReportData] = useState<ReportData | null>(null)
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
-  const [formData, setFormData] = useState({
-    projectName: "",
-    contractAddress: "",
-    website: "",
-    community: "",
-    whitepaper: "",
-    remarks: "",
-    images: [] as File[],
+  const [formData, setFormData] = useState(() => {
+    const defaultForm = {
+      projectName: "",
+      contractAddress: "",
+      website: "",
+      community: "",
+      whitepaper: "",
+      remarks: "",
+      images: [] as File[],
+    }
+    try {
+      const saved = sessionStorage.getItem('wisescan_risk_form')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return { ...defaultForm, ...parsed, images: [] as File[] }
+      }
+    } catch {}
+    return defaultForm
   })
-  const scanFileInputRef = useRef<HTMLInputElement>(null)
   const [evidenceImages, setEvidenceImages] = useState<File[]>([])
   const [evidenceText, setEvidenceText] = useState("")
+  const [scanImagePreviews, setScanImagePreviews] = useState<string[]>([])
   // Ref 突破 JSX 闭包：ProjectInfoCard 是在 setTimeout 内创建的，props 冻结。
   // 后续 state 变化不会反映到已存储的 JSX 元素中。通过 ref 保持最新值。
   const cardStateRef = useRef<{
@@ -510,7 +563,7 @@ export default function RiskAssessment() {
   // 阶段五：合约地址或付费状态变化 → 重置对话计数
   useEffect(() => {
     const key = `wisescan_chat_${formData.contractAddress?.trim() || 'unknown'}`
-    const saved = localStorage.getItem(key)
+    const saved = sessionStorage.getItem(key)
     setConversationCount(saved ? parseInt(saved, 10) : 0)
     setRemainingCount(isReportPaid ? -1 : 5)
   }, [formData.contractAddress, isReportPaid])
@@ -518,7 +571,12 @@ export default function RiskAssessment() {
   const [showAlertModal, setShowAlertModal] = useState(false)
   const [alertMsg, setAlertMsg] = useState("")
   const [alertShowResetBtn, setAlertShowResetBtn] = useState(false)
-  const [preloadedReportData, setPreloadedReportData] = useState<ReportData | null>(null)
+  const [preloadedReportData, setPreloadedReportData] = useState<ReportData | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('wisescan_risk_report')
+      return saved ? JSON.parse(saved) : null
+    } catch { return null }
+  })
   const [resolvedProjectName, setResolvedProjectName] = useState<string | null>(null)
   const [projectAliasesFromApi, setProjectAliasesFromApi] = useState<string[]>([])
   useEffect(() => { cardStateRef.current.reportDataReady = !!preloadedReportData }, [preloadedReportData])
@@ -528,7 +586,7 @@ export default function RiskAssessment() {
     if (preloadedReportData) {
       const addr = (preloadedReportData as any).contractAddress?.trim() || (preloadedReportData as any).contract_address?.trim() || ''
       const key = addr ? `wisescan_chat_${addr}` : 'wisescan_chat_unknown'
-      localStorage.removeItem(key)
+      sessionStorage.removeItem(key)
       setConversationCount(0)
       setRemainingCount(isReportPaid ? -1 : 5)
     }
@@ -548,26 +606,91 @@ export default function RiskAssessment() {
   const isOnboardingRef = useRef(false)  // 引导推送中标记（推送期间不自动滚动）
   const onboardingTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])  // 引导推送定时器（用于清理）
 
-  // 钱包断开时重定向
+  // 图片去重：持久化 ref 层跟踪所有已上传文件的 name+size key（跨渲染保持，即使 formData 异常重置也不丢失）
+  const uploadedFileKeysRef = useRef<Set<string>>(new Set())
+
+  // 钱包断开时重定向（仅从未在本会话连接过时才跳转，避免切APP/锁屏时误跳）
   useEffect(() => {
-    if (!isConnected) navigate("/")
+    if (isConnected) {
+      sessionStorage.setItem('wisescan_wallet_connected', '1')
+      return
+    }
+    const wasConnected = sessionStorage.getItem('wisescan_wallet_connected')
+    if (!wasConnected) navigate("/")
   }, [isConnected, navigate])
 
-  // 每次导航到本页面时，重置到顶部
+  // 🎤 ASR 错误提示：3 秒后自动消失
   useEffect(() => {
-    skipInitialScrollRef.current = true
-    window.scrollTo(0, 0)
-    messagesContainerRef.current?.scrollTo({ top: 0 })
-  }, [location.key])
+    if (!asrError) return
+    const timer = setTimeout(() => setAsrError(null), 3000)
+    return () => clearTimeout(timer)
+  }, [asrError])
 
+  // ── 持久化：消息变化时保存到 sessionStorage（刷新不丢失）──
   useEffect(() => {
-    // 引导推送期间不自动滚动（新用户逐步引导时保留阅读位置）
+    if (messages.length > 0) {
+      const safe = messages.map(m => ({
+        id: m.id, type: m.type, content: typeof m.content === 'string' ? m.content : '',
+        messageType: m.messageType, subtitle: m.subtitle, isButton: m.isButton,
+        isForm: m.isForm, isScanButton: m.isScanButton, timestamp: m.timestamp,
+        cardData: m.cardData, cardProjectName: m.cardProjectName, cardContractAddress: m.cardContractAddress,
+      }))
+      try { sessionStorage.setItem('wisescan_risk_messages', JSON.stringify(safe)) } catch {}
+    }
+  }, [messages])
+
+  // ── 持久化：报告数据变化时保存/清除（刷新不丢失）──
+  useEffect(() => {
+    if (preloadedReportData) {
+      try { sessionStorage.setItem('wisescan_risk_report', JSON.stringify(preloadedReportData)) } catch {}
+    } else {
+      try { sessionStorage.removeItem('wisescan_risk_report') } catch {}
+    }
+  }, [preloadedReportData])
+
+  // ── 持久化：表单数据变化时保存到 sessionStorage（刷新不丢失，退出清空）──
+  useEffect(() => {
+    const safe = {
+      projectName: formData.projectName,
+      contractAddress: formData.contractAddress,
+      website: formData.website,
+      community: formData.community,
+      whitepaper: formData.whitepaper,
+      remarks: formData.remarks,
+    }
+    try { sessionStorage.setItem('wisescan_risk_form', JSON.stringify(safe)) } catch {}
+  }, [formData])
+
+  // 🎯 页面加载时的智能定位
+  //  老用户无聊天记录 → 滚到表单位置（延迟等 DOM 稳定）
+  //  老用户有聊天记录 → 立即滚到消息底部（覆盖浏览器刷新默认）
+  //  全新用户 → 不处理，由引导推送控制
+  useEffect(() => {
+    const isOnboarded = localStorage.getItem('wisescan_completed_first_scan') === 'true'
+    if (!isOnboarded) return
+    const hasActiveChat = messages.length > initialMessages().length
+    if (hasActiveChat) {
+      // 有交互记录 → 立即滚到底部，避免浏览器默认 (0,0) 闪烁
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'instant', block: 'end' })
+      })
+    } else {
+      // 无交互记录 → 延迟等 DOM 稳定后滚到 ready-prompt
+      const t = setTimeout(() => {
+        const el = document.querySelector('[data-message-id="ready-prompt"]')
+        if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' })
+      }, 500)
+      return () => clearTimeout(t)
+    }
+  }, [])
+
+  // ⚠️ 后续消息变化时滚到底部（跳过首次消息渲染）
+  const hasSkippedInitialMount = useRef(false)
+  useEffect(() => {
     if (isOnboardingRef.current) return
-    // 首次进入页面：跳过自动滚到底部，停留在顶部
-    if (skipInitialScrollRef.current) {
-      skipInitialScrollRef.current = false
-      messagesContainerRef.current?.scrollTo({ top: 0 })
-      return
+    if (!hasSkippedInitialMount.current) {
+      hasSkippedInitialMount.current = true
+      return  // 首次加载跳过（由上面的初始定位 effect 处理）
     }
     // 卡片滚动由各自的 handler 手动处理，这里跳过避免双次滚动
     if (pendingCardScrollRef.current) {
@@ -579,12 +702,25 @@ export default function RiskAssessment() {
 
   // 新用户引导：逐步推送消息，完成后恢复自动滚动
   useEffect(() => {
+    // 如果 sessionStorage 中有已持久化的消息（说明是刷新而非首次加载），不覆盖
+    const hasPersisted = (() => {
+      try {
+        const saved = sessionStorage.getItem('wisescan_risk_messages')
+        if (!saved) return false
+        const parsed = JSON.parse(saved)
+        return Array.isArray(parsed) && parsed.length > 0
+      } catch { return false }
+    })()
+    if (hasPersisted) return
+
     const onboarded = localStorage.getItem('wisescan_completed_first_scan') === 'true'
     const all = initialMessages()
 
     if (onboarded) {
-      // 老用户：直接全展示
-      setMessages(all)
+      // 老用户：直接全展示（但消息已通过 lazy init 加载，避免重复 setMessages 触发 scrollToBottom）
+      if (messages.length !== all.length) {
+        setMessages(all)
+      }
     } else {
       // 新用户：逐步推送（每条间隔 2 秒）
       isOnboardingRef.current = true
@@ -669,13 +805,15 @@ export default function RiskAssessment() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          project_name: formData.projectName?.trim() || '未命名项目',
+          project_name: resolvedProjectName || formData.projectName?.trim() || '未命名项目',
           contract_address: formData.contractAddress?.trim() || undefined,
           message: userContent,
           chat_history: chatHistory,
-          user_address: address || undefined,
+          user_address: address || 'anonymous',
           conversation_count: conversationCount,
           is_paid: chatIsPaid,
+          report_data: reportData || preloadedReportData || undefined,
+          page: 'risk',
         }),
       });
 
@@ -700,10 +838,10 @@ export default function RiskAssessment() {
       if (data.is_paid) setChatIsPaid(true)
       if (typeof data.remaining_count === 'number') setRemainingCount(data.remaining_count)
 
-      // 阶段五：递增 localStorage 对话计数
+      // 阶段五：递增 sessionStorage 对话计数
       const chatKey = `wisescan_chat_${formData.contractAddress?.trim() || 'unknown'}`
       const newCount = conversationCount + 1
-      localStorage.setItem(chatKey, String(newCount))
+      sessionStorage.setItem(chatKey, String(newCount))
       setConversationCount(newCount)
 
       // 移除 loading，插入真实回复
@@ -747,13 +885,51 @@ export default function RiskAssessment() {
       const { createClient } = await import('@supabase/supabase-js')
       const supabase = createClient(supabaseUrl, supabaseKey)
       const addr = formData.contractAddress.trim()
-      const { data: proj } = await supabase.from('projects').select('id').eq('contract_address', addr.toLowerCase()).maybeSingle()
+
+      // 第0步：先通过服务器 upsert API（用 service role key）确保 projects 表有记录
+      //   比前端直写更可靠（RLS/ANON_KEY 可能无权限 INSERT）
+      let projectId: string | null = null
+      try {
+        await fetch('/api/projects/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: formData.projectName || 'Unknown',
+            contract_address: addr,
+            chain: /^T[A-Za-z1-9]{33}$/.test(addr) ? 'TRON' : /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr) ? 'Solana' : 'EVM',
+          }),
+        })
+        // 再查 projects 表拿 id
+        const { data: proj } = await supabase.from('projects').select('id').eq('contract_address', addr.toLowerCase()).maybeSingle()
+        projectId = proj?.id || null
+      } catch {
+        // fallback：直接在前端查/创建
+        const { data: proj } = await supabase.from('projects').select('id').eq('contract_address', addr.toLowerCase()).maybeSingle()
+        projectId = proj?.id || null
+        if (!projectId) {
+          const { data: newProj, error: createErr } = await supabase.from('projects').insert({
+            name: formData.projectName || 'Unknown',
+            contract_address: addr.toLowerCase(),
+            chain: /^T[A-Za-z1-9]{33}$/.test(addr) ? 'TRON' : /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr) ? 'Solana' : 'EVM',
+          }).select('id').maybeSingle()
+          if (createErr) {
+            const { data: existing } = await supabase.from('projects').select('id').eq('contract_address', addr.toLowerCase()).maybeSingle()
+            projectId = existing?.id || null
+          } else {
+            projectId = newProj?.id || null
+          }
+        }
+      }
+      if (projectId) console.log('📌 saveRiskReport projectId:', projectId)
       // 第1步：插入新记录
       const { data: inserted, error: insErr } = await supabase.from('risk_reports').insert({
         user_address: (address || 'anonymous').toLowerCase(),
-        project_id: proj?.id || null,
+        project_id: projectId || null,
         report_data: reportData,
-        total_score: reportData.total_score,
+        // 总分用六维之和（和前端展示一致），避免 API 返回的 total_score 和维度不一致
+        total_score: Array.isArray(reportData?.six_dimensions)
+          ? reportData.six_dimensions.reduce((s, d) => s + (d.score || 0), 0)
+          : (reportData.total_score || 0),
         risk_level: reportData.risk_level,
       }).select('id')
       if (insErr) {
@@ -763,12 +939,24 @@ export default function RiskAssessment() {
       const newId = inserted?.[0]?.id
       console.log('💾 risk_reports 写入成功, id:', newId)
       // 第2步：删除该用户该项目的旧记录（排除新插入的）
-      if (newId && proj?.id) {
+      if (newId && projectId) {
         await supabase.from('risk_reports').delete()
-          .eq('project_id', proj.id)
+          .eq('project_id', projectId)
           .ilike('user_address', (address || 'anonymous').toLowerCase())
           .neq('id', newId)
-        console.log('🧹 旧报告已清理')
+        // 防御性清理：如果仍有同一用户同一项目的多条记录，只保留最新一条
+        const { data: remaining } = await supabase.from('risk_reports')
+          .select('id')
+          .eq('project_id', projectId)
+          .ilike('user_address', (address || 'anonymous').toLowerCase())
+          .order('created_at', { ascending: false })
+        if (remaining && remaining.length > 1) {
+          const idsToDelete = remaining.slice(1).map((r: any) => r.id)
+          await supabase.from('risk_reports').delete().in('id', idsToDelete)
+          console.log('🧹 旧报告已清理 + 防御性清理', idsToDelete.length, '条')
+        } else {
+          console.log('🧹 旧报告已清理')
+        }
       }
     } catch (e: any) {
       console.warn('⚠️ risk_reports 写入失败:', e.message)
@@ -778,15 +966,26 @@ export default function RiskAssessment() {
   const [showCouponModal, setShowCouponModal] = useState(false)
   const [couponAmount, setCouponAmount] = useState(0)
   const [pendingUnlockProjectName, setPendingUnlockProjectName] = useState('') // 暂存待解锁的项目名
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [pendingPaymentProjectName, setPendingPaymentProjectName] = useState('')
 
   const handleReportUnlock = async (projectName: string) => {
-    // 已经生成过报告卡片 → 直接滚动
-    if (hasRiskReportRef.current && riskReportCardIdRef.current) {
-      scrollToCard(riskReportCardIdRef.current)
+    // 🏷️ 跳过支付（调试用：VITE_SKIP_PAYMENT=true 时直接生成报告，不弹支付窗）
+    if (import.meta.env.VITE_SKIP_PAYMENT === 'true') {
+      doGenerateReport(projectName)
       return
     }
+
     // 正在生成中 → 防止重复
-    if (isGeneratingReport || hasRiskReportRef.current) {
+    if (isGeneratingReport) {
+      return
+    }
+
+    // 💰 已付费用户且当前合约地址已付费 → 可免费重试
+    const currentAddr = formData.contractAddress.trim()
+    const paidForThisProject = currentAddr && sessionStorage.getItem(getProjectPaidKey(currentAddr)) === 'true'
+    if (paidForThisProject) {
+      doGenerateReport(projectName)
       return
     }
 
@@ -804,13 +1003,19 @@ export default function RiskAssessment() {
         setShowCouponModal(true)
         return // 等用户确认后再继续
       }
-    } catch { /* 查询失败直接走默认解锁 */ }
+    } catch { /* 查询失败直接走支付弹窗 */ }
 
-    // 无代金券 → 直接解锁
-    doGenerateReport(projectName)
+    // 无代金券 → 弹出支付窗（链上 USDT 支付）
+    setPendingPaymentProjectName(projectName)
+    setShowPaymentModal(true)
   }
 
   // 用户确认弹窗后执行真正的解锁
+  const handlePaymentSuccess = () => {
+    setShowPaymentModal(false)
+    doGenerateReport(pendingPaymentProjectName || formData.projectName || "未命名项目")
+  }
+
   const doGenerateReport = async (projectName: string) => {
     // 消耗代金券
     try {
@@ -825,7 +1030,10 @@ export default function RiskAssessment() {
       }
     } catch { /* 代金券消耗失败不影响报告生成 */ }
 
-    // 立即标记为已付费
+    // 标记当前项目已付费（全局 + 按合约地址独立，不同项目不串）
+    sessionStorage.setItem(paidKey, "true")
+    const addr = formData.contractAddress.trim()
+    if (addr) sessionStorage.setItem(getProjectPaidKey(addr), "true")
     setIsReportPaid(true)
     setIsGeneratingReport(true)
     hasRiskReportRef.current = true
@@ -844,7 +1052,6 @@ export default function RiskAssessment() {
     }])
     scrollToBottom()
 
-    const addr = formData.contractAddress.trim()
     const pName = formData.projectName.trim() || projectName || "未命名项目"
 
     // 🆕 将表单"补充说明"中的图片转 base64（并行转换）
@@ -878,12 +1085,14 @@ export default function RiskAssessment() {
     let apiProjectAliases: string[] = []
     if (!preloadedReportData) {
       const handleApiError = () => {
-        setMessages((prev) => prev.filter(m => m.id !== loadingMsgIdRef.current).concat([{
-          id: (Date.now()).toString(),
-          type: "ai",
-          content: "⚠️ 报告生成遇到点小状况，稍后自动重试...",
-          timestamp: new Date(),
-        }]))
+        setMessages((prev) => prev.filter(m => m.id !== loadingMsgIdRef.current).concat([
+          {
+            id: (Date.now()).toString(),
+            type: "ai",
+            content: "⚠️ 报告生成遇到点小状况，请重新点击解锁按钮",
+            timestamp: new Date(),
+          },
+        ]))
         loadingMsgIdRef.current = null
         hasRiskReportRef.current = false
         reportFailedRef.current = true   // ← 标记失败，允许免费重试
@@ -898,7 +1107,7 @@ export default function RiskAssessment() {
           body: JSON.stringify(buildRequestBody({
             project_name: pName,
             contract_address: addr || undefined,
-            user_address: address || undefined,
+            user_address: address || 'anonymous',
           })),
         })
         if (!res.ok) { handleApiError(); return }
@@ -951,7 +1160,7 @@ export default function RiskAssessment() {
       id: cardId,
       type: "ai",
       content: "",
-      messageType: "card",
+      messageType: "risk-report",
       cardData: fetchedData || undefined,
       cardProjectName: displayPName,
       cardContractAddress: addr || "无合约地址",
@@ -962,11 +1171,18 @@ export default function RiskAssessment() {
     scrollToCard(cardId)
 
     // 更新全网项目库（双写：localStorage + Supabase API）
-    upsertProject({
+    const updatedRecord = upsertProject({
       name: pName,
       contractAddress: addr || undefined,
       hasReport: true,
     })
+    // 同步更新 cardStateRef（确保 RiskReportCard 展示最新的评估次数）
+    if (updatedRecord) {
+      cardStateRef.current.assessmentCount = updatedRecord.assessmentCount
+      cardStateRef.current.lastEvaluation = updatedRecord.lastEvaluatedAt
+        ? new Date(updatedRecord.lastEvaluatedAt).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+        : '--'
+    }
     // 同步 Supabase 项目计数
     fetch('/api/projects/upsert', {
       method: 'POST',
@@ -998,7 +1214,42 @@ export default function RiskAssessment() {
     }, 800)
   }
 
-  const handleScanImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // CRC32 表（用于图片内容去重，不依赖 crypto.subtle，兼容 http 局域网调试）
+  const CRC32_TABLE = useMemo(() => {
+    const table = new Uint32Array(256)
+    for (let i = 0; i < 256; i++) {
+      let c = i
+      for (let j = 0; j < 8; j++) {
+        c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1)
+      }
+      table[i] = c >>> 0
+    }
+    return table
+  }, [])
+
+  const crc32 = useCallback((bytes: Uint8Array) => {
+    let c = -1 >>> 0
+    for (let i = 0; i < bytes.length; i++) {
+      c = (CRC32_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8)) >>> 0
+    }
+    return (c ^ (-1 >>> 0)) >>> 0
+  }, [CRC32_TABLE])
+
+  /** 计算文件内容 key：前 8KB 字节的 CRC32 + 文件大小（比 name+size 更稳，TP Wallet 文件名可能变化） */
+  const computeFileKey = useCallback(async (file: File): Promise<string> => {
+    try {
+      const slice = file.slice(0, 8192)
+      const buffer = await slice.arrayBuffer()
+      const uint8 = new Uint8Array(buffer)
+      const hash = crc32(uint8)
+      return `${file.size}_${hash.toString(16).padStart(8, '0')}`
+    } catch {
+      // 极端降级：文件名+大小
+      return `${file.name}_${file.size}`
+    }
+  }, [crc32])
+
+  const handleScanImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files) return
     const newFiles = Array.from(files)
@@ -1009,12 +1260,24 @@ export default function RiskAssessment() {
       setShowAlertModal(true)
       return
     }
-    const validTypes = ["image/jpeg", "image/png"]
-    // 重复校验：用 fileName + fileSize 作为唯一标识
-    const existingKeys = new Set(current.map(f => `${f.name}_${f.size}`))
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/heic"]
+
+    // 重复校验（三层防御）：
+    // 1) 当前 formData.images 里的文件名+大小
+    // 2) uploadedFileKeysRef 持久化 tracking（Ref 层）
+    // 3) 文件内容前 8KB 的 CRC32 + size（TP Wallet 等环境文件名可能变化）
+    const existingKeys = new Set([
+      ...current.map(f => `${f.name}_${f.size}`),
+      ...Array.from(uploadedFileKeysRef.current),
+    ])
+    const newFileKeys = await Promise.all(newFiles.map(async (file) => ({
+      file,
+      key: await computeFileKey(file),
+    })))
+
     const duplicateNames: string[] = []
     const uniqueNewFiles: File[] = []
-    for (const file of newFiles) {
+    for (const { file, key } of newFileKeys) {
       if (!validTypes.includes(file.type)) {
         setAlertMsg(`⚠️ 文件格式不支持\n\n${file.name} 格式不支持，仅支持 JPG/PNG 格式。`)
         setShowAlertModal(true)
@@ -1025,12 +1288,12 @@ export default function RiskAssessment() {
         setShowAlertModal(true)
         return
       }
-      const key = `${file.name}_${file.size}`
       if (existingKeys.has(key)) {
         duplicateNames.push(file.name)
       } else {
         uniqueNewFiles.push(file)
         existingKeys.add(key)
+        uploadedFileKeysRef.current.add(key)  // 写入持久化 ref
       }
     }
     if (duplicateNames.length > 0) {
@@ -1039,7 +1302,35 @@ export default function RiskAssessment() {
     }
     if (uniqueNewFiles.length === 0) return
     setFormData(prev => ({ ...prev, images: [...current, ...uniqueNewFiles] }))
+    // 生成缩略图预览
+    const newPreviews = uniqueNewFiles.map(f => URL.createObjectURL(f))
+    setScanImagePreviews(prev => [...prev, ...newPreviews])
     e.target.value = ""
+  }
+
+  /** 删除已上传图片 */
+  const handleRemoveScanImage = (index: number) => {
+    setFormData(prev => {
+      const images = prev.images as File[]
+      return { ...prev, images: images.filter((_, i) => i !== index) }
+    })
+    setScanImagePreviews(prev => prev.filter((_, i) => i !== index))
+  }
+
+  /** 风险扫描图片上传：动态创建 input（Android 多选兼容，触发系统相册网格视图） */
+  const handleScanImageUpload = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.multiple = true
+    input.accept = 'image/*'
+    input.onchange = async (e: Event) => {
+      const target = e.target as HTMLInputElement
+      if (target.files && target.files.length > 0) {
+        await handleScanImageChange(e as unknown as React.ChangeEvent<HTMLInputElement>)
+      }
+      target.remove()
+    }
+    input.click()
   }
 
   // 合约地址验证状态
@@ -1108,10 +1399,23 @@ export default function RiskAssessment() {
   }, [formData.contractAddress])
 
   const handleScanButtonClick = async () => {
+    // 🔄 清除上一次的项目级状态（按次付费：每次查询独立）
+    hasProjectInfoRef.current = false
+    projectInfoCardIdRef.current = null
+    hasRiskReportRef.current = false
+    riskReportCardIdRef.current = null
+
     // 🔄 清除上一次的提示状态（防止错误提示残留）
     setAlertMsg('')
     setShowAlertModal(false)
     setAlertShowResetBtn(false)
+
+    // 🔄 新扫描重置项目卡片状态（避免上一个项目的卡片/报告污染新项目）
+    hasProjectInfoRef.current = false
+    projectInfoCardIdRef.current = null
+    hasRiskReportRef.current = false
+    riskReportCardIdRef.current = null
+    cardStateRef.current.isReportPaid = false
 
     // 🆕 自动搜索合约地址（静默）：没填地址 + 有项目名 + 未激活无地址模式
     // 搜到了自动填入，搜不到不做任何事（留给用户自己填或选无地址模式）
@@ -1284,7 +1588,7 @@ export default function RiskAssessment() {
         project_name: projectName,
         contract_address: scanAddr || undefined,
         quick_verify: true,
-        user_address: address || undefined,
+        user_address: address || 'anonymous',
         frontend_verified: true,
       }
       console.log('[WiseScan] 开始快速验证', verifyBody)
@@ -1314,8 +1618,14 @@ export default function RiskAssessment() {
             )
           }
         } else {
+          // 非 2xx 响应（如 403 等）
+          let errMsg = "无法匹配到有效项目数据"
+          try {
+            const errJson = await verifyRes.json()
+            if (errJson.error) errMsg = errJson.error
+          } catch {}
           setAlertMsg(
-            "❌ 无法匹配到有效项目数据\n\n" +
+            `❌ ${errMsg}\n\n` +
             "该合约地址或项目名称无法在链上数据库中找到对应项目。\n\n" +
             "可能的原因：\n" +
             "• 合约地址输入有误（请逐位核对）\n" +
@@ -1360,7 +1670,7 @@ export default function RiskAssessment() {
         project_name: projectName,
         contract_address: scanAddr || undefined,
         user_notes: formData.remarks?.trim() || undefined,
-        user_address: address || undefined,
+        user_address: address || 'anonymous',
       }
       const fullRes = await fetch('/api/generate-risk-report', {
         method: 'POST',
@@ -1419,6 +1729,9 @@ export default function RiskAssessment() {
       type: "ai",
       content: cardComponent,
       messageType: "card",
+      cardData: cardStateRef.current.reportData as any,
+      cardProjectName: displayName,
+      cardContractAddress: scanAddr || (noContractMode ? "无合约地址" : ""),
       timestamp: new Date(),
     }
     pendingCardScrollRef.current = true
@@ -1442,7 +1755,7 @@ export default function RiskAssessment() {
     setMessages(initialMessages())
     setFormData({ projectName: "", contractAddress: "", website: "", community: "", whitepaper: "", remarks: "", images: [] })
     setInputValue("")
-    setIsVoiceMode(true)
+    setIsVoiceMode(false)
     setIsRecording(false)
     if (asrClientRef.current) { asrClientRef.current.stopRecording(); asrClientRef.current = null }
     setShowNewConversationModal(false)
@@ -1453,8 +1766,16 @@ export default function RiskAssessment() {
     setSearchResults([])
     setEvidenceImages([])
     setEvidenceText("")
-    // 重置支付状态，新会话需要重新付费
-    localStorage.removeItem(paidKey)
+    setScanImagePreviews([])
+    // 重置支付状态，新会话需要重新付费（清除全局 + 所有按合约地址的付费标记）
+    sessionStorage.removeItem(paidKey)
+    // 清除所有按项目付费的 key（wisescan_paid_ 前缀）
+    try {
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const k = sessionStorage.key(i)
+        if (k?.startsWith('wisescan_paid_')) { sessionStorage.removeItem(k); i-- }
+      }
+    } catch {}
     setIsReportPaid(false)
     // 重置卡片生成状态，新会话可以重新生成
     hasProjectInfoRef.current = false
@@ -1463,6 +1784,8 @@ export default function RiskAssessment() {
     riskReportCardIdRef.current = null
     loadingMsgIdRef.current = null
     reportFailedRef.current = false
+    // 重置图片去重持久化 tracking
+    uploadedFileKeysRef.current = new Set()
     setReportData(null)
     setIsGeneratingReport(false)
     setPreloadedReportData(null)
@@ -1544,6 +1867,12 @@ export default function RiskAssessment() {
 
       {/* Messages Container */}
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scroll-pt-14">
+        {/* 🎤 ASR 错误提示：顶部显示，3 秒后自动消失 */}
+        {asrError && (
+          <div className="sticky top-0 z-30 mx-auto max-w-sm p-2 bg-zinc-800/90 rounded-lg text-zinc-300 text-xs text-center border border-zinc-700/50">
+            ⚠️ {asrError}
+          </div>
+        )}
         {messages.map((message) => (
           <div
             key={message.id}
@@ -1586,7 +1915,7 @@ export default function RiskAssessment() {
                 <div className="flex flex-col gap-2 items-start w-full">
                   <button
                     onClick={() => handleScanButtonClick()}
-                    className="min-w-[180px] px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-full text-sm font-semibold transition-colors"
+                    className="min-w-[180px] px-6 py-2.5 bg-blue-500 hover:bg-blue-600 active:bg-blue-400 active:scale-95 text-white rounded-full text-sm font-semibold transition-all duration-150"
                   >
                     {message.content as string}
                   </button>
@@ -1710,9 +2039,31 @@ export default function RiskAssessment() {
                     <label className="text-sm text-white">上传图片/截图 <span className="text-zinc-500 text-xs">(可选)</span></label>
                     <div className="flex items-center gap-0 bg-zinc-800 border border-[#343438] rounded px-3 py-2">
                       <input type="text" placeholder="聊天截图、提现失败截图等" readOnly value={(formData.images as File[]).length > 0 ? (formData.images as File[]).map(f => f.name).join(", ") : ""} className="flex-1 bg-transparent text-white text-xs placeholder-zinc-600 placeholder:text-xs focus:outline-none truncate" />
-                      <button onClick={() => scanFileInputRef.current?.click()} className="flex-shrink-0 px-2 py-0.5 bg-zinc-600 hover:bg-zinc-500 text-zinc-300 text-xs rounded transition-colors">上传</button>
+                      <button onClick={handleScanImageUpload} className="flex-shrink-0 px-2 py-0.5 bg-zinc-600 hover:bg-zinc-500 text-zinc-300 text-xs rounded transition-colors">上传</button>
                     </div>
-                    <span className="text-xs text-zinc-500 -mt-1 block" style={{ lineHeight: "1.15" }}>最多10张，支持 JPG、PNG，每张不超过5MB。可上传模式图、群聊记录、公告截图等</span>
+
+                    {/* 图片缩略图预览 */}
+                    {scanImagePreviews.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {scanImagePreviews.map((preview, idx) => (
+                          <div key={idx} className="relative">
+                            <img
+                              src={preview}
+                              alt={`图片${idx + 1}`}
+                              className="w-16 h-16 object-cover rounded border border-zinc-600 bg-zinc-800"
+                            />
+                            <button
+                              onClick={() => handleRemoveScanImage(idx)}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600 transition-colors"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <span className="text-xs text-zinc-500 -mt-1 block" style={{ lineHeight: "1.15" }}>最多10张，支持 JPG/PNG/WebP/HEIC，每张不超过5MB，可多选。可上传模式图、群聊记录、公告截图等</span>
                   </div>
 
                   <div className="text-xs text-zinc-400 flex items-start gap-2">
@@ -1720,7 +2071,7 @@ export default function RiskAssessment() {
                     <span>请勿上传或输入钱包私钥、密码等敏感信息。</span>
                   </div>
                 </div>
-              ) : message.messageType === "card" && message.cardData ? (
+              ) : message.messageType === "risk-report" && message.cardData ? (
                 <ErrorBoundary onError={() => {
                   reportFailedRef.current = true
                   cardStateRef.current.reportFailed = true
@@ -1744,11 +2095,29 @@ export default function RiskAssessment() {
                   />
                 </ErrorBoundary>
               ) : message.messageType === "card" ? (
-                // ProjectInfoCard — 免费阶段卡片，content 里就是组件
-                <>{message.content}</>
+                // ProjectInfoCard — 免费阶段卡片
+                // 优先用 content（JSX 组件），刷新后用 cardData 重建
+                message.content ? (
+                  <>{message.content}</>
+                ) : message.cardData ? (
+                  <ErrorBoundary>
+                    <ProjectInfoCard
+                      projectName={message.cardProjectName || formData.projectName || "未命名项目"}
+                      contractAddress={message.cardContractAddress || formData.contractAddress.trim() || (noContractMode ? "无合约地址" : "")}
+                      reportData={message.cardData as any}
+                      onCopyAddress={handleCopyAddress}
+                      onUnlock={() => handleReportUnlock(message.cardProjectName || formData.projectName || "未命名项目")}
+                      onAnalyzeBusinessModel={() => setShowAnalyzeModal(true)}
+                      cardStateRef={cardStateRef}
+                      assessmentCount={cardStateRef.current.assessmentCount}
+                      lastEvaluation={cardStateRef.current.lastEvaluation}
+                      linkedToken={cardStateRef.current.linkedToken}
+                    />
+                  </ErrorBoundary>
+                ) : null
               ) : (
                 <div
-                  className={`px-4 py-2 rounded-lg text-sm leading-relaxed whitespace-pre-wrap ${
+                  className={`px-4 py-2 rounded-lg text-sm leading-relaxed whitespace-pre-wrap break-all max-w-full overflow-hidden ${
                     message.type === "ai" ? "bg-zinc-800 text-zinc-200" : "bg-green-500 text-white"
                   }`}
                 >
@@ -1758,7 +2127,7 @@ export default function RiskAssessment() {
                 </div>
               )}
 
-              {!message.isForm && !message.isScanButton && message.messageType !== "card" && (
+              {!message.isForm && !message.isScanButton && message.messageType !== "card" && message.messageType !== "risk-report" && (
                 <span className="text-xs text-zinc-600 px-2">
                   {message.timestamp.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
                 </span>
@@ -1795,7 +2164,14 @@ export default function RiskAssessment() {
                 setIsRecording(true)
                 const client = new TencentAsrClient({
                   onResult: (text) => setInputValue(text),
-                  onError: (err) => { setAsrError(err); console.error('[ASR]', err); },
+                  onError: (err) => {
+                    setAsrError(err)
+                    console.error('[ASR]', err)
+                    // 浏览器不支持语音输入 → 自动切回文字模式
+                    if (err.includes('浏览器不支持')) {
+                      setIsVoiceMode(false)
+                    }
+                  },
                   onStart: () => setIsRecording(true),
                   onEnd: (finalText) => {
                     setIsRecording(false)
@@ -1827,13 +2203,6 @@ export default function RiskAssessment() {
               placeholder="输入项目名称或合约地址..."
               className="flex-1 px-4 py-2 bg-zinc-700 text-white rounded-lg text-sm placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
             />
-          )}
-
-          {/* ASR 错误提示 */}
-          {asrError && (
-            <div className="mx-4 mt-2 p-2 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-xs text-center">
-              ⚠️ {asrError}
-            </div>
           )}
 
           {!isVoiceMode && (
@@ -1895,6 +2264,18 @@ export default function RiskAssessment() {
               </button>
               <button
                 onClick={() => {
+                  // 退出时清空对话 + 付费状态 + 表单数据
+                  sessionStorage.removeItem(paidKey)
+                  sessionStorage.removeItem('wisescan_risk_form')
+                  try {
+                    for (let i = 0; i < sessionStorage.length; i++) {
+                      const k = sessionStorage.key(i)
+                      if (k?.startsWith('wisescan_paid_')) { sessionStorage.removeItem(k); i-- }
+                    }
+                  } catch {}
+                  setIsReportPaid(false)
+                  sessionStorage.removeItem('wisescan_risk_messages')
+                  sessionStorage.removeItem('wisescan_risk_report')
                   setShowBackConfirmModal(false)
                   navigate("/home")
                 }}
@@ -2135,15 +2516,20 @@ export default function RiskAssessment() {
         </div>
       )}
 
-      {/* Hidden file input for initial form image upload */}
-      <input
-        ref={scanFileInputRef}
-        type="file"
-        accept="image/jpeg,image/png"
-        multiple
-        className="hidden"
-        onChange={handleScanImageChange}
-      />
+      {/* 已改用动态创建 input 的方式（handleScanImageUpload），不再保留隐藏 input */}
+
+      {/* 支付弹窗 */}
+      {showPaymentModal && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          onPaymentSuccess={handlePaymentSuccess}
+          price={2.99}
+          reportType="risk"
+          userAddress={address || ''}
+          projectId={formData.contractAddress.trim() || undefined}
+        />
+      )}
     </div>
   )
 }

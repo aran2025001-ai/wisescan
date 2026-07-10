@@ -175,7 +175,7 @@ export default function EvidenceUpload({
           {files.length < maxImages && (
             <label className="w-full aspect-square bg-zinc-800 rounded-lg border-2 border-dashed border-zinc-600 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-500 transition-colors">
               <Upload className="w-3.5 h-3.5 text-zinc-400 mb-0.5" />
-              <span className="text-zinc-400 text-[10px]">添加图片</span>
+              <span className="text-zinc-400 text-[12px]">添加图片</span>
               <input
                 ref={fileInputRef}
                 type="file"

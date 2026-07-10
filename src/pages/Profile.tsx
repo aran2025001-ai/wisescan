@@ -136,7 +136,7 @@ export default function Profile() {
         <div className="flex items-center px-4 py-2">
         <button
           onClick={() => navigate('/home')}
-          className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-zinc-800 transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-zinc-800 active:bg-zinc-700 active:scale-[0.95] transition-all duration-150"
           aria-label="返回"
         >
           <ChevronLeft className="h-5 w-5" />
@@ -155,7 +155,7 @@ export default function Profile() {
             <button
               key={index}
               onClick={item.onClick}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 text-zinc-300 hover:bg-zinc-900 hover:text-blue-400 group"
+              className="w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-150 text-zinc-300 hover:bg-zinc-900 hover:text-blue-400 active:bg-zinc-800 active:scale-[0.97] group"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="flex-shrink-0 text-zinc-500 group-hover:text-blue-400 transition-colors">
@@ -184,20 +184,20 @@ export default function Profile() {
 
       {/* 退出钱包确认弹窗 */}
       {isLogoutModalOpen && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setIsLogoutModalOpen(false)}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999]" onClick={() => setIsLogoutModalOpen(false)}>
           <div className="bg-zinc-900 rounded-lg p-4 w-80 mx-4 space-y-3 border border-[#343438]" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-white font-semibold text-sm text-center">退出钱包</h2>
             <p className="text-zinc-300 text-xs leading-relaxed text-left">确认要退出当前钱包吗？退出后需要重新连接才能使用明鉴。</p>
             <div className="flex gap-3 pt-1">
               <button
                 onClick={() => setIsLogoutModalOpen(false)}
-                className="flex-1 py-1.5 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-xs"
+                className="flex-1 py-3 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 active:bg-zinc-600 active:scale-[0.97] transition-all duration-150 text-sm"
               >
                 取消
               </button>
               <button
                 onClick={handleConfirmLogout}
-                className="flex-1 py-1.5 px-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs"
+                className="flex-1 py-1.5 px-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-500 active:scale-[0.97] transition-all duration-150 text-xs"
               >
                 确认退出
               </button>

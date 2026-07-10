@@ -120,3 +120,11 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, sans-serif;
 }
+
+/* 全局字号调大两号（override Tailwind v4 默认 CSS 变量值，v4 的 rolldown 会合并 :root 导致覆盖失效）*/
+.text-xs { font-size: 0.875rem; }
+.text-sm { font-size: 1rem; }
+.text-base { font-size: 1.125rem; }
+.text-lg { font-size: 1.25rem; }
+.text-xl { font-size: 1.5rem; }
+.text-2xl { font-size: 1.75rem; }

@@ -136,7 +136,7 @@ export default function AdminProjects() {
                           }
                         } catch { showToast('操作失败', 'error') }
                       }}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                      className={`px-1.5 py-0.5 rounded text-[12px] font-medium transition-colors ${
                         item.is_trusted
                           ? 'bg-green-900 text-green-300 hover:bg-green-800'
                           : 'bg-gray-800 text-gray-500 hover:bg-gray-700'

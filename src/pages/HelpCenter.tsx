@@ -89,7 +89,7 @@ export default function HelpCenter() {
               <div key={item.id} className="overflow-hidden rounded-lg">
                 <button
                   onClick={() => toggleFAQ(item.id)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-zinc-900 hover:bg-zinc-800 transition-colors"
+                  className="w-full flex items-center justify-between px-4 py-3 bg-zinc-800 hover:bg-zinc-700 transition-colors"
                 >
                   <span className="text-xs font-medium text-white text-left">{item.question}</span>
                   <div className="flex-shrink-0 ml-2">

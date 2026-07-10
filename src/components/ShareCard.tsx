@@ -59,9 +59,11 @@ const shortAddress = (addr: string): string => {
   return `${addr.slice(0, 10)}****${addr.slice(-8)}`;
 };
 
-/** 百分比智能格式化：整数不显示小数 */
-const fmtPct = (v: number) =>
-  Number.isInteger(v) ? `${Math.round(v)}%` : `${v.toFixed(1)}%`;
+/** 百分比智能格式化：最多1位小数、超100%截断到100% */
+const fmtPct = (v: number) => {
+  const clamped = Math.min(Math.max(0, Number(v) || 0), 100);
+  return clamped % 1 === 0 ? `${Math.round(clamped)}%` : `${clamped.toFixed(1)}%`;
+};
 
 /** 风险色映射 */
 const COLORS: Record<string, { dot: string; text: string }> = {
@@ -96,7 +98,7 @@ export const ShareCard: React.FC<ShareCardProps> = ({
 
   return (
     <div
-      className={`relative overflow-hidden ${className}`}
+      className={`relative ${className}`}
       style={{
         width,
         aspectRatio: '941 / 1672',
@@ -113,15 +115,14 @@ export const ShareCard: React.FC<ShareCardProps> = ({
           position: 'absolute',
           right: valRight,
           top: '41.7%',
-          maxWidth: '42%',
+          maxWidth: '60%',
           fontSize: Math.round(14 * s),
           fontWeight: 600,
           color: '#374151',
           lineHeight: 1.3,
           textAlign: 'right',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          overflow: 'visible',
+          wordBreak: 'break-word',
         }}
       >
         {projectName}

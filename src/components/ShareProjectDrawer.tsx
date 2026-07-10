@@ -4,14 +4,13 @@
  * 功能：点击"分享项目情报" → 展示 ShareCard 全屏预览 → 底部抽屉弹窗 → 保存/分享到社交渠道
  * 
  * 设计：与邀请分享 ShareButton 保持一致的抽屉风格（线性渐变背景、圆角顶部、拖拽条、渠道图标）
- * 技术：html2canvas 将 ShareCard 截图生成 PNG，供保存和分享
+ * 技术：点击渠道 → 复制文案 → 弹窗引导用户粘贴发送
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import html2canvas from 'html2canvas'
-import { QRCodeSVG } from 'qrcode.react'
 import { ShareCard } from './ShareCard'
+import { capturePosterToImageUrl } from '../utils/share-poster-image'
 
 // ============================================================
 // Props 类型定义
@@ -42,6 +41,8 @@ interface ShareProjectDrawerProps {
   className?: string
   /** 邀请码（用于生成二维码链接） */
   inviteCode?: string
+  /** 项目 ID（UUID），用于生成正确的分享链接 */
+  projectId?: string
 }
 
 // ============================================================
@@ -74,12 +75,6 @@ const Channels = [
     iconUrl: 'https://cdn.simpleicons.org/telegram/ffffff',
   },
   {
-    id: 'bluetooth',
-    label: '蓝牙',
-    iconBg: '#0078D7',
-    iconUrl: 'https://cdn.simpleicons.org/bluetooth/ffffff',
-  },
-  {
     id: 'more',
     label: '更多',
     iconBg: '#6B7280',
@@ -88,32 +83,6 @@ const Channels = [
         <circle cx="12" cy="5" r="2"/>
         <circle cx="12" cy="12" r="2"/>
         <circle cx="12" cy="19" r="2"/>
-      </svg>
-    ),
-  },
-]
-
-const Actions = [
-  {
-    id: 'save',
-    label: '保存',
-    iconBg: '#F0F0F0',
-    iconSvg: (
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#555" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
-        <polyline points="17 21 17 13 7 13 7 21"/>
-        <polyline points="7 3 7 8 15 8"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'close',
-    label: '取消',
-    iconBg: '#F0F0F0',
-    iconSvg: (
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#999" strokeWidth="2.5" strokeLinecap="round">
-        <line x1="18" y1="6" x2="6" y2="18"/>
-        <line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
     ),
   },
@@ -136,16 +105,36 @@ export default function ShareProjectDrawer({
   label = '分享项目情报',
   className = '',
   inviteCode,
+  projectId,
 }: ShareProjectDrawerProps) {
   // ── 状态 ──
   const [showPreview, setShowPreview] = useState(false)   // 全屏预览
   const [showSheet, setShowSheet] = useState(false)       // 底部抽屉
-  const [capturedSrc, setCapturedSrc] = useState<string>('')  // 截图后的 PNG dataURL
   const [toast, setToast] = useState('')
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; channel: string }>({ open: false, channel: '' })
+  const [shortCode, setShortCode] = useState<string>('')   // 短链接 code
+  const [posterImageUrl, setPosterImageUrl] = useState<string>('') // 海报 PNG 图片 URL
+  const [isGenerating, setIsGenerating] = useState(false)  // 海报图片生成中
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
-  const cardRef = useRef<HTMLDivElement>(null)  // 引用 ShareCard DOM 元素
-  const captureAttempted = useRef(false)        // 防止重复截图
+  const scaleContainerRef = useRef<HTMLDivElement>(null)  // ResizeObserver 容器
+  const posterNodeRef = useRef<HTMLDivElement>(null)      // 用于 html2canvas 截图的节点
+  const hasGeneratedRef = useRef(false)                   // 避免生成失败后无限重试
+
+  // ── 海报缩放：卡片固定 375px 渲染，scale 到 85vw 容器 ──
+  const [cardScale, setCardScale] = useState(() => {
+    if (typeof window === 'undefined') return 1
+    return Math.min(window.innerWidth * 0.85, 375) / 375
+  })
+
+  useEffect(() => {
+    const el = scaleContainerRef.current
+    if (!el || !showPreview) return
+    const ro = new ResizeObserver(([entry]) => {
+      if (entry) setCardScale(entry.contentRect.width / 375)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [showPreview])
 
   // ── Toast 自动消失 ──
   useEffect(() => {
@@ -158,57 +147,88 @@ export default function ShareProjectDrawer({
 
   // ── 基础 URL ──
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://wisescan.xyz'
-  const qrUrl = `${baseUrl}/library?address=${contractAddress}`
+  // 二维码内容：带邀请码的欢迎页（分享者获得邀请收益）
+  const qrContentUrl = inviteCode ? `${baseUrl}/invite?code=${inviteCode}` : baseUrl
+  // 优先使用短链接，回退到长链接（给用户去分享的链接）
+  const posterParams = new URLSearchParams({
+    type: 'project',
+    name: projectName,
+    addr: contractAddress,
+    top10: typeof top10Holding === 'number' && !Number.isNaN(top10Holding) ? top10Holding.toFixed(1) : '--',
+    risk: riskLevel,
+    color: riskColor || 'red',
+    comp: String(infoCompleteness),
+    clevel: completenessLevel,
+    review: review,
+    qr: `${baseUrl}/library?address=${contractAddress}`,
+  })
+  const longUrl = `${baseUrl}/share/poster?${posterParams.toString()}`
+  const shareUrl = shortCode ? `${baseUrl}/s/${shortCode}` : longUrl
+
+  // ── 生成海报 PNG 图片 + 短链接（预览打开时异步创建）──
+  useEffect(() => {
+    if (!showPreview || shortCode || isGenerating || hasGeneratedRef.current) return
+    const node = posterNodeRef.current
+    if (!node) return
+    hasGeneratedRef.current = true
+    setIsGenerating(true)
+
+    const posterData = {
+      type: 'project',
+      data: {
+        name: projectName,
+        addr: contractAddress,
+        top10: typeof top10Holding === 'number' && !Number.isNaN(top10Holding) ? top10Holding.toFixed(1) : '--',
+        risk: riskLevel,
+        color: riskColor || 'red',
+        comp: String(infoCompleteness),
+        clevel: completenessLevel,
+        review: review,
+        qr: `${baseUrl}/library?address=${contractAddress}`,
+      },
+    }
+
+    const generate = async () => {
+      try {
+        // ── Phase 1：预生成短码（与服务端算法一致），让二维码先渲染短链接 ──
+        const ts = Date.now().toString(36).slice(-4)
+        const rand = Math.random().toString(36).slice(2, 6)
+        const preCode = `${ts}${rand}`
+        setShortCode(preCode)
+
+        // ── Phase 2：等 React 渲染 + QR 码稳定，再截图 ──
+        await new Promise(r => setTimeout(r, 600))
+
+        const imageUrl = await capturePosterToImageUrl(node, { scale: 4 })
+        setPosterImageUrl(imageUrl)
+
+        // ── Phase 3：用预生成的短码 + 图片 URL 创建短链 ──
+        await fetch('/api/shorten', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientCode: preCode, ...posterData, imageUrl }),
+        })
+      } catch (e) {
+        console.warn('[ShareProjectDrawer] generate poster image failed:', e)
+        // 失败时回退到长链接（用户仍可分享）
+      } finally {
+        setIsGenerating(false)
+      }
+    }
+
+    generate()
+  }, [showPreview, shortCode, isGenerating, projectName, contractAddress, top10Holding, riskLevel, riskColor, infoCompleteness, completenessLevel, review, baseUrl])
 
   // ── 分享文案 ──
+  const sharePct = (typeof top10Holding === 'number' && !Number.isNaN(top10Holding)) ? top10Holding.toFixed(1) : '--';
   const shareText = useMemo(() =>
-    `🔍 明鉴 WiseScan — 项目安全评估报告\n项目：${projectName}\n合约：${contractAddress}\nTOP10持仓占比：${top10Holding}%\n风险评级：${riskLevel}\n信息完整性：${infoCompleteness}%\n\n${qrUrl}`,
-    [projectName, contractAddress, top10Holding, riskLevel, infoCompleteness, qrUrl]
+    `明鉴WiseScan — 我正在评估${projectName}\n\n📊 ${projectName}项目基本情报：\nTOP10持仓：${sharePct}% · ${riskLevel}\n信息完整度：${infoCompleteness}%\n合约地址：${contractAddress.slice(0, 6)}...${contractAddress.slice(-4)}\n\n点击查看完整项目基本情报：\n${shareUrl}\n\n如果要查看${projectName}的完整全景风险评估报告，请扫码进入明鉴进行查看。`,
+    [projectName, contractAddress, sharePct, riskLevel, infoCompleteness, shareUrl]
   )
 
-  // ── 截图函数：将 ShareCard 转为 PNG dataURL ──
-  const captureCard = useCallback(async () => {
-    if (!cardRef.current) return
-    try {
-      const canvas = await html2canvas(cardRef.current, {
-        scale: 2,                     // 2x 高清
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: null,
-        width: 375,
-        height: 700,
-      })
-      const dataUrl = canvas.toDataURL('image/png')
-      setCapturedSrc(dataUrl)
-      captureAttempted.current = true
-    } catch (e) {
-      console.warn('[ShareProjectDrawer] html2canvas failed:', e)
-    }
-  }, [])
-
-  // ── 预览打开时触发截图 ──
-  useEffect(() => {
-    if (showPreview && !captureAttempted.current) {
-      // 等 ShareCard 渲染完成再截图
-      setTimeout(() => captureCard(), 300)
-    }
-  }, [showPreview, captureCard])
-
-  // ── 打开抽屉时重新截图 ──
-  useEffect(() => {
-    if (showSheet) {
-      captureAttempted.current = false
-      setTimeout(() => captureCard(), 200)
-    }
-  }, [showSheet, captureCard])
-
-  // ── 数据变化时重新截图（防止缓存数据覆盖新数据）──
-  useEffect(() => {
-    if (showPreview) {
-      captureAttempted.current = false
-      setTimeout(() => captureCard(), 150)
-    }
-  }, [showPreview, review, top10Holding, riskLevel, infoCompleteness])
+  // ── 渠道标签 & 颜色 ──
+  const channelLabel: Record<string, string> = { wechat: '微信', qq: 'QQ', whatsapp: 'WhatsApp', telegram: 'Telegram' }
+  const channelColor: Record<string, string> = { wechat: '#07C160', qq: '#12B7F5', whatsapp: '#25D366', telegram: '#0088CC' }
 
   // ── 复制文本 ──
   const doCopy = useCallback((text: string) => {
@@ -223,65 +243,17 @@ export default function ShareProjectDrawer({
     }
   }, [])
 
-  // ── 保存图片 ──
-  const saveImage = useCallback(async (): Promise<boolean> => {
-    const src = capturedSrc || ''
-    if (!src) { setToast('图片尚未生成，请稍后重试'); return false }
-    try {
-      const resp = await fetch(src)
-      const blob = await resp.blob()
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `明鉴-${projectName || '项目情报'}-${contractAddress.slice(0, 8)}.png`
-      document.body.appendChild(a); a.click(); document.body.removeChild(a)
-      setToast('✅ 图片已保存')
-      return true
-    } catch (e) {
-      console.warn('[ShareProjectDrawer] saveImage failed:', e)
-      setToast('图片保存失败，请重试')
-      return false
-    }
-  }, [capturedSrc, projectName, contractAddress])
-
   // ── 核心分享逻辑 ──
   const doShare = useCallback(async (method: string) => {
     setShowSheet(false)
 
     try {
       switch (method) {
-        // 保存图片
-        case 'save': {
-          await saveImage()
-          return
-        }
-
-        // 蓝牙 / 系统分享
-        case 'bluetooth': {
-          const src = capturedSrc || ''
-          if (!src) { setToast('图片尚未生成，请稍后重试'); return }
-          const resp = await fetch(src)
-          const blob = await resp.blob()
-          const file = new File([blob], `明鉴-${projectName || '项目情报'}.png`, { type: 'image/png' })
-          if (navigator.share && navigator.canShare?.({ files: [file] })) {
-            try {
-              await navigator.share({ files: [file], title: `明鉴 WiseScan - ${projectName}` })
-              setToast('✅ 分享成功！')
-              return
-            } catch { /* 用户取消 */ }
-          }
-          const a = document.createElement('a')
-          a.href = URL.createObjectURL(blob)
-          a.download = `明鉴-${projectName || '项目情报'}.png`
-          document.body.appendChild(a); a.click(); document.body.removeChild(a)
-          setToast('图片已保存，可通过蓝牙发送至附近设备')
-          return
-        }
-
-        // 更多（Web Share API）
+        // 更多（Web Share API / 复制链接）
         case 'more': {
           if (navigator.share) {
             try {
-              await navigator.share({ title: `明鉴 WiseScan - ${projectName}`, text: shareText, url: qrUrl })
+              await navigator.share({ title: `明鉴 WiseScan - ${projectName}`, text: shareText, url: shareUrl })
               setToast('✅ 分享成功！')
               return
             } catch { /* 用户取消 */ }
@@ -298,38 +270,50 @@ export default function ShareProjectDrawer({
       console.warn('[ShareProjectDrawer] share error:', e)
       setToast('分享失败，请重试')
     }
-  }, [projectName, contractAddress, capturedSrc, shareText, qrUrl, doCopy, saveImage])
+  }, [projectName, shareText, shareUrl, doCopy])
 
-  // ── 渠道点击 ──
+  // ── 渠道点击：复制文案 → 确认弹窗 ──
   const handleChannelClick = useCallback((channelId: string) => {
+    if (isGenerating) {
+      setToast('海报图片生成中，请稍候...')
+      return
+    }
     if (channelId === 'wechat' || channelId === 'qq' || channelId === 'whatsapp' || channelId === 'telegram') {
+      doCopy(shareText)
       setConfirmModal({ open: true, channel: channelId })
       setShowSheet(false)
     } else {
       doShare(channelId)
     }
-  }, [doShare])
+  }, [shareText, doCopy, doShare, isGenerating])
 
-  const handleConfirmOk = useCallback(async () => {
+  const handleConfirmOk = useCallback(() => {
     const ch = confirmModal.channel
+    const chLabel = channelLabel[ch] || ch
     setConfirmModal({ open: false, channel: '' })
-    // 先保存图片，成功后再跳转
-    const saved = await saveImage()
-    if (!saved) return
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+
+    if (isMobile) {
+      // 手机端：文案已在渠道点击时复制，直接提示
+      setToast(`📋 文案已复制！请打开${chLabel}并粘贴发送`)
+      return
+    }
+
+    // PC 端：尝试唤起桌面客户端
     if (ch === 'wechat') {
       try { window.location.href = 'weixin://' } catch {}
-      setToast('正在打开微信...')
+      setToast('📋 文案已复制！正在打开微信...')
     } else if (ch === 'qq') {
       try { window.location.href = 'mqqapi://' } catch {}
-      setToast('正在打开QQ...')
+      setToast('📋 文案已复制！正在打开QQ...')
     } else if (ch === 'whatsapp') {
-      window.open('https://wa.me/', '_blank', 'noopener,noreferrer')
-      setToast('正在打开 WhatsApp...')
+      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank', 'noopener,noreferrer')
+      setToast('📋 文案已复制！正在打开 WhatsApp...')
     } else if (ch === 'telegram') {
-      window.open('https://t.me/', '_blank', 'noopener,noreferrer')
-      setToast('正在打开 Telegram...')
+      window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank', 'noopener,noreferrer')
+      setToast('📋 文案已复制！正在打开 Telegram...')
     }
-  }, [confirmModal.channel, saveImage])
+  }, [confirmModal.channel, shareText, shareUrl, channelLabel])
 
   const closeAll = () => {
     setShowPreview(false)
@@ -338,7 +322,10 @@ export default function ShareProjectDrawer({
 
   // ── 触发按钮点击 ──
   const handleClick = () => {
-    captureAttempted.current = false
+    hasGeneratedRef.current = false
+    setShortCode('')
+    setPosterImageUrl('')
+    setIsGenerating(false)
     setShowPreview(true)
   }
 
@@ -351,13 +338,9 @@ export default function ShareProjectDrawer({
     infoCompleteness,
     completenessLevel,
     review,
-    qrCodeUrl: qrUrl,
-    width: 375,
+    qrCodeUrl: qrContentUrl,
+    width: 375,  // 固定 375px 渲染，由外层 transform:scale 适配容器
   }
-
-  // 确认弹窗渠道颜色 & 标签
-  const channelLabel: Record<string, string> = { wechat: '微信', qq: 'QQ', whatsapp: 'WhatsApp', telegram: 'Telegram' }
-  const channelColor: Record<string, string> = { wechat: '#07C160', qq: '#12B7F5', whatsapp: '#25D366', telegram: '#0088CC' }
 
   return (
     <>
@@ -374,14 +357,20 @@ export default function ShareProjectDrawer({
 
       {/* ══════ 状态1：全屏 ShareCard 预览 ══════ */}
       {showPreview && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center">
-          <div className="relative" style={{ width: '85vw', maxWidth: 375 }}>
-            {/* ShareCard 渲染区（用于 html2canvas 截图） */}
-            <div ref={cardRef} className="rounded-2xl overflow-hidden shadow-2xl">
+        <div className="fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center px-6 py-10 overflow-y-auto">
+          {/* 海报容器 — 85vw + 黑边留白，overflow-hidden 裁剪自然形成黑边 */}
+          <div ref={scaleContainerRef} className="relative rounded-2xl shadow-2xl"
+            style={{ width: '85vw', maxWidth: 375, overflow: 'hidden' }}>
+            {/* 缩放包装：卡片固定 375px 渲染，transform:scale 适配容器 */}
+            <div ref={posterNodeRef} style={{
+              width: 375,
+              transform: `scale(${cardScale})`,
+              transformOrigin: 'top left',
+            }}>
               <ShareCard {...cardProps} />
             </div>
 
-            {/* 顶部返回按钮 */}
+            {/* 左上角返回按钮 */}
             <button onClick={closeAll}
               className="absolute flex items-center justify-center rounded-full"
               style={{ top: '2%', left: '2%', width: 36, height: 36, background: 'rgba(0,0,0,0.3)' }}>
@@ -394,13 +383,24 @@ export default function ShareProjectDrawer({
             <button onClick={() => setShowSheet(true)}
               className="absolute flex items-center justify-center rounded-full"
               style={{ top: '2%', right: '2%', width: 36, height: 36, background: 'rgba(0,0,0,0.3)' }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
                 <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
                 <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
               </svg>
             </button>
           </div>
+
+          {/* 海报生成状态提示 */}
+          {isGenerating && (
+            <div className="mt-4 flex items-center gap-2 text-white/80 text-xs">
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+              <span>正在生成分享图片...</span>
+            </div>
+          )}
+          {!isGenerating && shortCode && posterImageUrl && (
+            <div className="mt-3 text-white/60 text-[13px]">分享图片已生成</div>
+          )}
         </div>,
         document.body
       )}
@@ -413,25 +413,29 @@ export default function ShareProjectDrawer({
             style={{ background: 'linear-gradient(180deg,#F0F4FC 0%,#E4ECFA 100%)', maxWidth: 430, margin: '0 auto' }}
             onClick={e => e.stopPropagation()}>
 
-            {/* 拖拽条 */}
-            <div className="w-10 h-1 mx-auto mb-4 rounded-full opacity-40" style={{ background: '#8899AA' }}/>
+            {/* 拖拽条 + 右上角关闭 */}
+            <div className="flex items-center mb-4">
+              <div className="flex-1 flex justify-center">
+                <div className="w-10 h-1 rounded-full opacity-40" style={{ background: '#8899AA' }}/>
+              </div>
+              <button onClick={() => setShowSheet(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-full bg-black/10 hover:bg-black/15 active:scale-95 transition-all absolute right-5">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#666" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
 
-            {/* 文件信息 + ShareCard 缩略图 */}
+            {/* 卡片预览 */}
             <div className="bg-white rounded-2xl p-4 shadow-sm mb-5">
               <div className="text-sm font-semibold text-gray-800">
-                明鉴-{projectName || '项目情报'}.png
+                明鉴-{projectName || '项目情报'}
               </div>
               <div className="text-xs text-gray-400 mt-0.5">项目安全评估分享卡片</div>
               <div className="flex justify-center mt-3">
-                <div className="rounded-xl overflow-hidden shadow-md" style={{ width: 150, height: 280 }}>
-                  {capturedSrc ? (
-                    <img src={capturedSrc} alt={`${projectName} 情报卡片`}
-                      className="w-full h-full object-cover"/>
-                  ) : (
-                    <div className="w-full h-full bg-blue-50 flex items-center justify-center">
-                      <span className="text-blue-400 text-xs">生成中...</span>
-                    </div>
-                  )}
+                <div className="rounded-xl overflow-hidden shadow-md" style={{ width: 150, height: 267 }}>
+                  <ShareCard {...cardProps} width={150} />
                 </div>
               </div>
             </div>
@@ -451,22 +455,7 @@ export default function ShareProjectDrawer({
                         onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}/>
                     )}
                   </div>
-                  <span className="text-[11px] text-gray-600 mt-0.5">{ch.label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* 底部操作 */}
-            <div className="flex justify-around pt-3 pb-1" style={{ borderTop: '1px solid rgba(0,0,0,0.05)' }}>
-              {Actions.map(act => (
-                <button key={act.id}
-                  onClick={() => act.id === 'close' ? setShowSheet(false) : doShare(act.id)}
-                  className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-sm"
-                    style={{ width: 48, height: 48, background: act.iconBg }}>
-                    {act.iconSvg}
-                  </div>
-                  <span className="text-xs text-gray-500">{act.label}</span>
+                  <span className="text-[13px] text-gray-600 mt-0.5">{ch.label}</span>
                 </button>
               ))}
             </div>
@@ -492,7 +481,7 @@ export default function ShareProjectDrawer({
               分享到{channelLabel[confirmModal.channel] || confirmModal.channel}
             </div>
             <div className="text-sm text-gray-500 leading-relaxed mb-5">
-              保存该项目评估海报，请在弹出的{channelLabel[confirmModal.channel] || confirmModal.channel}中选择好友并从相册分享该图片
+              文案已复制，请在弹出的{channelLabel[confirmModal.channel] || confirmModal.channel}中选择好友并粘贴发送
             </div>
             <div className="flex gap-3">
               <button onClick={() => setConfirmModal({ open: false, channel: '' })}

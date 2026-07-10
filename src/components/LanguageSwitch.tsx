@@ -26,7 +26,7 @@ export function LanguageSwitch() {
         中文
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-32 rounded-lg border border-[#343438] bg-zinc-900 shadow-lg py-1 z-50">
+        <div className="absolute right-0 top-full mt-1 w-32 rounded-lg border border-[#343438] bg-zinc-900 shadow-lg py-1 z-[99999]">
             {[
             { label: '中文', active: true },
             { label: 'English', active: false, disabled: true },

@@ -2,6 +2,7 @@ import { useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Spinner } from './components/ui/spinner'
 import ErrorBoundary from './components/ErrorBoundary'
+import WalletGuard from './components/WalletGuard'
 
 // 仅首页立即加载，其余全部按需加载
 import Welcome from './pages/Welcome'
@@ -24,6 +25,8 @@ const WithdrawalHistory = lazy(() => import('./pages/WithdrawalHistory'))
 const Feedback = lazy(() => import('./pages/Feedback'))
 const InviteLanding = lazy(() => import('./pages/InviteLanding'))
 const ShareCardPreview = lazy(() => import('./pages/ShareCardPreview'))
+const SharePosterPage = lazy(() => import('./pages/SharePosterPage'))
+const ShortLinkRedirect = lazy(() => import('./pages/ShortLinkRedirect'))
 
 // 管理后台
 const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'))
@@ -65,8 +68,20 @@ export default function App() {
     }
   }, [])
 
+  // 全局字号调大两号（覆盖 Tailwind v4 JS 运行时生成的 CSS 变量）
+  useEffect(() => {
+    const root = document.documentElement
+    root.style.setProperty('--text-xs', '0.875rem')
+    root.style.setProperty('--text-sm', '1rem')
+    root.style.setProperty('--text-base', '1.125rem')
+    root.style.setProperty('--text-lg', '1.25rem')
+    root.style.setProperty('--text-xl', '1.5rem')
+    root.style.setProperty('--text-2xl', '1.75rem')
+  }, [])
+
   return (
     <BrowserRouter>
+      <WalletGuard />
       <div className="min-h-screen bg-black flex justify-center">
         <div className="w-full max-w-[428px] bg-[#050505]">
           <ErrorBoundary fallback={(err) => (
@@ -108,6 +123,8 @@ export default function App() {
                 <Route path="/profile/withdrawal" element={<WithdrawalHistory />} />
                 <Route path="/invite" element={<InviteLanding />} />
                 <Route path="/preview/share-card" element={<ShareCardPreview />} />
+                <Route path="/share/poster" element={<SharePosterPage />} />
+                <Route path="/s/:code" element={<ShortLinkRedirect />} />
                 {/* 管理后台 */}
                 <Route path="/admin/login" element={<AdminLogin />} />
                 <Route path="/admin/dashboard" element={<AdminDashboard />} />

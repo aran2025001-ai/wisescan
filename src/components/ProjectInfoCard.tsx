@@ -16,11 +16,11 @@ function generateShortReview(reportData: any): string {
   const positives: string[] = []
   const negatives: string[] = []
 
-  // 1. 审计状态
+  // 1. 审计状态（修复：排除"无未审计项"）
   const codeDim = dims.find((d: any) => d.dimension?.includes('代码'))
   if (codeDim) {
     if (codeDim.score >= 18 || codeDim.deduction?.includes('无扣分')) positives.push('已完成审计')
-    else if (codeDim.score <= 8 || codeDim.deduction?.includes('未审计')) negatives.push('尚未完成审计')
+    else if (codeDim.score <= 8 || (codeDim.deduction?.includes('未审计') && !/无未审计/.test(codeDim.deduction))) negatives.push('尚未完成审计')
   }
 
   // 2. 融资记录
@@ -34,14 +34,15 @@ function generateShortReview(reportData: any): string {
   const lp = reportData.onChainData?.goplus?.lpLockStatus || reportData.liquidity_lock
   if (lp === '已锁定') positives.push('LP已锁定')
 
-  // 5. 团队透明度
+  // 5. 团队透明度（修复：排除"未发现匿名"等否定表述）
   const teamDim = dims.find((d: any) => d.dimension?.includes('团队'))
-  if (teamDim?.deduction?.includes('匿名') || teamDim?.score <= 8) negatives.push('团队匿名')
+  if ((teamDim?.deduction?.includes('匿名') && !/未发现|无.*匿名|非匿名|不匿名/.test(teamDim.deduction)) || (teamDim?.score ?? 20) <= 8) negatives.push('团队匿名')
 
-  // 6. 模式变更
+  // 6. 模式变更：优先以 history_mode_changes 为准，deduction 仅作兜底
   const histDim = dims.find((d: any) => d.dimension?.includes('历史'))
-  if (histDim?.deduction?.includes('变更')) {
-    const changes = (reportData.history_mode_changes || '').toString()
+  const changes = (reportData.history_mode_changes || '').toString().trim()
+  const hasModeChange = changes && changes !== '无' && changes !== '0' && changes !== '0次' && !changes.startsWith('无')
+  if (hasModeChange || (histDim?.deduction && /模式变更\d+次|模式变更≥\d+次|变更\d+次/.test(histDim.deduction))) {
     const changeCount = parseInt(changes)
     if (!Number.isNaN(changeCount) && changeCount >= 2) {
       negatives.push(`曾有过${changeCount}次模式变更`)
@@ -181,17 +182,17 @@ export default function ProjectInfoCard({
     // 回退 DeepSeek 文本字段
     const val = reportData?.liquidity_lock
     if (!val || val === '未知' || val === '--') return null
-    if (val.includes('已锁定') || val.includes('Lock')) return { text: val, color: 'text-green-400', icon: '🔒' }
+    if (val === '已锁定' || val.toLowerCase() === 'locked') return { text: val, color: 'text-green-400', icon: '🔒' }
     if (val.includes('部分') || val.includes('Part')) return { text: val, color: 'text-yellow-400', icon: '🔓' }
     return { text: val, color: 'text-red-400', icon: '⚠️' }
   })()
 
   // TOP10 持仓渲染（优先 GoPlus 硬数据，回退 DeepSeek 文本字段）
   const top10Render = (() => {
-    // 优先从 GoPlus 硬数据读取（top10Percent 是 0-100 的数值）
+    // 优先从 GoPlus 硬数据读取（top10Percent 是 0-100 的数值，超 100% 的异常值自动 clamp）
     const goplusTop10 = effectiveOnChain?.goplus?.top10Percent
     if (goplusTop10 !== null && goplusTop10 !== undefined) {
-      const pct = Number(goplusTop10)
+      const pct = Math.min(Math.max(0, Number(goplusTop10) || 0), 100)
       if (!Number.isNaN(pct)) {
         const pctStr = Number.isInteger(pct) ? `${Math.round(pct)}%` : `${pct.toFixed(1)}%`
         if (pct > 0 && pct < 50) return { text: `${pctStr} · 分布较分散`, color: 'text-green-400', icon: '🟢' }
@@ -202,9 +203,9 @@ export default function ProjectInfoCard({
     // 回退 DeepSeek 文本字段
     const val = reportData?.top10_concentration
     if (!val || val === '未知' || val === '--') return null
-    const pct = parseInt(val)
+    const pct = Math.min(parseInt(val), 100)
     if (Number.isNaN(pct)) {
-      if (val.includes('极高') || val.includes('集中')) return { text: val, color: 'text-red-400', icon: '🔴' }
+      if (val.includes('极高') || val.includes('高度集中')) return { text: val, color: 'text-red-400', icon: '🔴' }
       if (val.includes('中度') || val.includes('偏高')) return { text: val, color: 'text-yellow-400', icon: '🟡' }
       return { text: val, color: 'text-green-400', icon: '🟢' }
     }
@@ -232,13 +233,9 @@ export default function ProjectInfoCard({
   }
 
   const handleUnlockReport = () => {
-    // 已付费用户 → 跳过支付弹窗，直接解锁/重新生成，不重复扣费
-    const paid = cardStateRef?.current?.isReportPaid
-    if (paid && onUnlock) {
-      onUnlock()
-      return
-    }
-    // 未付费用户 → 打开支付确认弹窗
+    // 按次付费模式：每次点击都弹出支付确认弹窗
+    // 用户确认后再调用 onUnlock 进行报告生成
+    // （无需检查 isReportPaid，每次查询独立付费）
     setIsUnlockConfirmOpen(true)
   }
 
@@ -334,7 +331,7 @@ export default function ProjectInfoCard({
   const shareTop10Holding = (() => {
     const goplusTop10 = effectiveOnChain?.goplus?.top10Percent
     if (goplusTop10 !== null && goplusTop10 !== undefined) {
-      const pct = Number(goplusTop10)
+      const pct = Math.min(Math.max(0, Number(goplusTop10) || 0), 100)
       if (!Number.isNaN(pct)) return pct
     }
     const val = reportData?.top10_concentration
@@ -405,7 +402,7 @@ export default function ProjectInfoCard({
               {showInfoPopover && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowInfoPopover(false)} />
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 bg-zinc-800 border border-[#343438] rounded-lg p-2.5 w-48 shadow-lg">
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-[99999] bg-zinc-800 border border-[#343438] rounded-lg p-2.5 w-48 shadow-lg">
                     <p className="text-zinc-300 text-xs leading-relaxed">评估次数反映项目被查询的频率，不代表安全性</p>
                   </div>
                 </>
@@ -461,7 +458,7 @@ export default function ProjectInfoCard({
             >
               补充证据
             </button>
-            <span className="text-zinc-500 text-[10px]">上传更多资料可提高报告准确性</span>
+            <span className="text-zinc-500 text-[12px]">上传更多资料可提高报告准确性</span>
           </div>
 
           <button

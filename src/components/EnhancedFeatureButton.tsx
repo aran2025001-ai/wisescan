@@ -62,8 +62,8 @@ export function EnhancedFeatureButton({
         className="absolute inset-0 rounded-2xl transition-all duration-100"
         style={{
           background: isHovering
-            ? "linear-gradient(135deg, rgba(18, 38, 95, 0.95) 0%, rgba(10, 22, 65, 0.95) 100%)"
-            : "linear-gradient(135deg, rgba(12, 30, 80, 0.95) 0%, rgba(6, 15, 50, 0.95) 100%)",
+            ? "linear-gradient(135deg, rgba(38, 78, 150, 0.95) 0%, rgba(25, 55, 115, 0.95) 100%)"
+            : "linear-gradient(135deg, rgba(30, 62, 130, 0.95) 0%, rgba(18, 40, 92, 0.95) 100%)",
           boxShadow: isPressed
             ? "0 8px 16px rgba(0, 0, 0, 0.8), inset 0 2px 4px rgba(0, 0, 0, 0.6)"
             : isHovering
@@ -128,7 +128,7 @@ export function EnhancedFeatureButton({
             <div
               className="text-left text-xs transition-colors duration-200"
               style={{
-                color: isHovering ? "#93c5fd" : "#71717a",
+                color: isHovering ? "#93c5fd" : "#a1a1aa",
               }}
             >
               {subtitle}

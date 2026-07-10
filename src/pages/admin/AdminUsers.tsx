@@ -80,7 +80,7 @@ export default function AdminUsers() {
                   <td className="py-2 pr-2 text-right">{user.couponCount || 0}</td>
                   <td className="py-2 text-right">
                     <button onClick={() => navigate(`/admin/users/${encodeURIComponent(user.address)}`)}
-                      className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-[10px]">详情</button>
+                      className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-[12px]">详情</button>
                   </td>
                 </tr>
               ))}

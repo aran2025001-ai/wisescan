@@ -18,7 +18,7 @@ function BarChart({ data, dataKey, color }: { data: any[]; dataKey: string; colo
         const h = ((d[dataKey] || 0) / max) * 100
         return (
           <div key={i} className="flex-1 flex flex-col items-center gap-1">
-            <span className="text-[10px] text-gray-500">{d[dataKey]}</span>
+            <span className="text-[12px] text-gray-500">{d[dataKey]}</span>
             <div
               className="w-full rounded-t"
               style={{ height: `${Math.max(h, 2)}%`, backgroundColor: color, minHeight: 2 }}

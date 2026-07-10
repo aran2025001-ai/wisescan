@@ -114,7 +114,7 @@ export default function MyCoupons() {
                 <div className={`text-xl font-black ${isExpired ? 'text-zinc-700' : 'text-zinc-600'}`}>
                   COUPON
                 </div>
-                <div className={`text-[10px] mt-0.5 whitespace-nowrap ${isExpired ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                <div className={`text-[12px] mt-0.5 whitespace-nowrap ${isExpired ? 'text-zinc-500' : 'text-zinc-400'}`}>
                   支付时自动优先使用此券
                 </div>
               </div>

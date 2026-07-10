@@ -77,14 +77,14 @@ export default function AdminEvidences() {
               {list.map(item => (
                 <tr key={item.id} className="border-b border-gray-800/50 hover:bg-gray-900/50 cursor-pointer"
                   onClick={() => setDetail(item)}>
-                  <td className="py-2 pr-2 whitespace-nowrap text-[11px]">
+                  <td className="py-2 pr-2 whitespace-nowrap text-[13px]">
                     {item.created_at ? new Date(item.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--'}
                   </td>
                   <td className="py-2 pr-2">{item.project_name || '--'}</td>
                   <td className="py-2 pr-2 font-mono">{maskAddr(item.contributor_address)}</td>
                   <td className="py-2 pr-2">{typeLabel[item.content_type] || item.content_type}</td>
                   <td className="py-2 pr-2">
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                    <span className={`px-1.5 py-0.5 rounded text-[12px] ${
                       item.status === 'verified' ? 'bg-green-900 text-green-300' :
                       item.status === 'rejected' ? 'bg-red-900 text-red-300' : 'bg-amber-900 text-amber-300'
                     }`}>
@@ -95,9 +95,9 @@ export default function AdminEvidences() {
                     {item.status === 'pending' && (
                       <div className="flex gap-1 justify-end">
                         <button onClick={e => { e.stopPropagation(); handleAction(item.id, 'approve') }}
-                          className="px-2 py-1 bg-green-700 hover:bg-green-600 text-white rounded text-[10px]">采纳</button>
+                          className="px-2 py-1 bg-green-700 hover:bg-green-600 text-white rounded text-[12px]">采纳</button>
                         <button onClick={e => { e.stopPropagation(); handleAction(item.id, 'reject') }}
-                          className="px-2 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-[10px]">拒绝</button>
+                          className="px-2 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-[12px]">拒绝</button>
                       </div>
                     )}
                   </td>
@@ -133,7 +133,7 @@ export default function AdminEvidences() {
                     className="max-h-48 rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
                     onClick={(e) => { e.stopPropagation(); setImagePreview(detail.image_url) }}
                   />
-                  <p className="text-gray-500 text-[10px] mt-0.5">点击图片查看大图</p>
+                  <p className="text-gray-500 text-[12px] mt-0.5">点击图片查看大图</p>
                 </div>
               )}
               <div className="mt-2">

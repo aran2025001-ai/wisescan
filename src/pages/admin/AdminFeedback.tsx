@@ -75,7 +75,7 @@ export default function AdminFeedback() {
                   <td className="py-2 pr-2 font-mono">{maskAddr(item.user_address)}</td>
                   <td className="py-2 pr-2 text-gray-400 max-w-[200px] truncate">{item.content?.slice(0, 50)}</td>
                   <td className="py-2 pr-2">
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                    <span className={`px-1.5 py-0.5 rounded text-[12px] ${
                       item.status === 'resolved' ? 'bg-green-900 text-green-300' : 'bg-amber-900 text-amber-300'
                     }`}>
                       {item.status === 'resolved' ? '已处理' : '待处理'}
@@ -84,7 +84,7 @@ export default function AdminFeedback() {
                   <td className="py-2 text-right">
                     {item.status === 'pending' && (
                       <button onClick={e => { e.stopPropagation(); handleResolve(item.id) }}
-                        className="px-2 py-1 bg-green-700 hover:bg-green-600 text-white rounded text-[10px]">标记已处理</button>
+                        className="px-2 py-1 bg-green-700 hover:bg-green-600 text-white rounded text-[12px]">标记已处理</button>
                     )}
                   </td>
                 </tr>

@@ -115,16 +115,29 @@ export class TencentAsrClient {
   async startRecording(): Promise<void> {
     console.log('[ASR] 🎤 开始启动录音...')
     try {
+      // 🛡️ 前置检查：浏览器是否支持 getUserMedia
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+        this.onError('您的浏览器不支持语音输入')
+        this.onEnd('')
+        return
+      }
+
       // 获取麦克风权限（指定 16000Hz 单声道，确保采样率匹配腾讯云 ASR）
       console.log('[ASR] 🎤 请求麦克风权限...')
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: { ideal: 16000 },
-          channelCount: { ideal: 1 },
-          echoCancellation: true,
-          noiseSuppression: true,
-        }
-      })
+      try {
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: { ideal: 16000 },
+            channelCount: { ideal: 1 },
+            echoCancellation: true,
+            noiseSuppression: true,
+          }
+        })
+      } catch (firstErr) {
+        // 部分 WebView（如 TP 钱包）不支持音频参数约束，降级为无参数模式
+        console.warn('[ASR] ⚠️ 带参数的 getUserMedia 失败，尝试无参数模式:', firstErr)
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      }
       this.audioContext = new AudioContext({ sampleRate: 16000 })
       console.log(`[ASR] ✅ 麦克风权限已获取，实际采样率: AudioContext=${this.audioContext.sampleRate}Hz`)
 

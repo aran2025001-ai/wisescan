@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import { useParams, useNavigate } from "react-router-dom"
 import RiskReportCard from "../components/RiskReportCard"
 import ProjectInfoCard from "../components/ProjectInfoCard"
+import PaymentModal from "../components/PaymentModal"
 import { useAccount } from "wagmi"
 import { ChevronLeft, Check } from "lucide-react"
 
@@ -33,11 +34,14 @@ export default function ProjectDetail() {
   const [error, setError] = useState<string | null>(null)
   const [isAnalyzeModalOpen, setIsAnalyzeModalOpen] = useState(false)
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [paymentPrice, setPaymentPrice] = useState(2.99) // 2.99=首次解锁, 1.0=更新报告
   const [, ] = useState(false)
   const [, setInviteCount] = useState(0)  // 已成功邀请人数
   const [isUpdateRiskModalOpen, setIsUpdateRiskModalOpen] = useState(false)
   const [showPaymentResult, setShowPaymentResult] = useState(false)
   const [paymentResultMsg, setPaymentResultMsg] = useState("")
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false)  // 生成报告loading
   const [evidenceImages, setEvidenceImages] = useState<File[]>([])
   const [evidenceText, setEvidenceText] = useState("")
 
@@ -112,16 +116,37 @@ export default function ProjectDetail() {
     })
   }
 
-  const handleUnlockReport = () => handleGenerateRiskReport()
+  const handleUnlockReport = () => {
+    // 已付费直接生成，未付费弹支付窗
+    if (isPaid) {
+      handleGenerateRiskReport()
+    } else {
+      setPaymentPrice(2.99)
+      setIsUnlockModalOpen(true)
+    }
+  }
+
+  const handlePaymentSuccess = () => {
+    setShowPaymentModal(false)
+    handleGenerateRiskReport()
+  }
+
   const handleAnalyzeBusinessModel = () => setIsAnalyzeModalOpen(true)
-  const handleUpdateRiskReport = () => setIsUpdateRiskModalOpen(true)
+  const handleUpdateRiskReport = () => {
+    setPaymentPrice(1.0)
+    setShowPaymentModal(true)
+  }
 
   // 付费后生成报告并写入 risk_reports 表（持久化）
   const handleGenerateRiskReport = async () => {
+    setIsGeneratingReport(true)
+    setPaymentResultMsg('')
+    setShowPaymentResult(true)
     try {
       const body = {
         project_name: projectName,
         contract_address: contractAddress,
+        project_id: id,
         user_address: address,
       }
       const resp = await fetch('/api/generate-risk-report', {
@@ -143,24 +168,29 @@ export default function ProjectDetail() {
       console.error('生成报告失败:', err.message)
       setPaymentResultMsg('报告生成失败，请稍后重试。')
     }
+    setIsGeneratingReport(false)
   }
 
   // 前端直接写 risk_reports（弥补服务端存库偶发失败）
   // 先插新记录，再删旧记录，确保不丢数据
+  // 用 URL 参数 id 作为 project_id，避免查 contract_address 返回不同 UUID
   const saveRiskReport = async (reportData: any) => {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
       const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
       const { createClient } = await import('@supabase/supabase-js')
       const supabase = createClient(supabaseUrl, supabaseKey)
-      // 查 project_id
-      const { data: proj } = await supabase.from('projects').select('id').eq('contract_address', contractAddress.toLowerCase()).maybeSingle()
+      // 直接用 URL 参数 id，和 isPaid 查询用的同一个 project_id
+      const projectId = id
       // 第1步：插入新记录
       const { data: inserted, error: insErr } = await supabase.from('risk_reports').insert({
         user_address: (address || 'anonymous').toLowerCase(),
-        project_id: proj?.id || null,
+        project_id: projectId,
         report_data: reportData,
-        total_score: reportData.total_score,
+        // 总分用六维之和（和前端展示一致），避免 API 返回的 total_score 和维度不一致
+        total_score: Array.isArray(reportData?.six_dimensions)
+          ? reportData.six_dimensions.reduce((s: number, d: any) => s + (d.score || 0), 0)
+          : (reportData.total_score || 0),
         risk_level: reportData.risk_level,
       }).select('id')
       if (insErr) {
@@ -170,9 +200,9 @@ export default function ProjectDetail() {
       const newId = inserted?.[0]?.id
       console.log('💾 risk_reports 写入成功, id:', newId)
       // 第2步：删除该用户该项目的旧记录（排除新插入的）
-      if (newId && proj?.id) {
+      if (newId && projectId) {
         await supabase.from('risk_reports').delete()
-          .eq('project_id', proj.id)
+          .eq('project_id', projectId)
           .ilike('user_address', (address || 'anonymous').toLowerCase())
           .neq('id', newId)
         console.log('🧹 旧报告已清理')
@@ -193,6 +223,27 @@ export default function ProjectDetail() {
       <div className="text-white flex flex-col items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-blue-500 mb-4" />
         <p className="text-zinc-400 text-xs">加载项目信息...</p>
+      </div>
+    )
+  }
+
+  // 加载出错或项目不存在
+  if (error || !project) {
+    return (
+      <div className="text-white flex flex-col items-center justify-center min-h-screen px-6">
+        <div className="w-16 h-16 rounded-full bg-red-900/30 flex items-center justify-center mb-4">
+          <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <p className="text-zinc-300 text-sm font-medium mb-1">加载失败</p>
+        <p className="text-zinc-500 text-xs text-center mb-6 max-w-xs">{error || '项目数据不存在'}</p>
+        <button
+          onClick={() => navigate('/library')}
+          className="px-5 py-2 bg-blue-500 hover:bg-blue-600 active:bg-blue-400 active:scale-[0.97] text-white rounded-full text-sm font-medium transition-all duration-150"
+        >
+          返回项目库
+        </button>
       </div>
     )
   }
@@ -281,7 +332,7 @@ export default function ProjectDetail() {
       {/* Analyze Business Model Modal */}
       {isAnalyzeModalOpen && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999]"
           onClick={() => setIsAnalyzeModalOpen(false)}
         >
           <div
@@ -314,7 +365,7 @@ export default function ProjectDetail() {
       {/* Update Risk Report Modal */}
       {isUpdateRiskModalOpen && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999]"
           onClick={() => setIsUpdateRiskModalOpen(false)}
         >
           <div
@@ -333,13 +384,8 @@ export default function ProjectDetail() {
               <button
                 onClick={() => {
                   setIsUpdateRiskModalOpen(false)
-                  let evidenceMsg = ""
-                  if (evidenceImages.length > 0 || evidenceText.length > 0) {
-                    evidenceMsg = `，已补充${evidenceImages.length}张图片、${evidenceText.length}字文本等证据`
-                  }
-                  setPaymentResultMsg(`正在更新全景风险报告${evidenceMsg}。`)
-                  setShowPaymentResult(true)
-                  handleGenerateRiskReport()
+                  setPaymentPrice(1.0)
+                  setTimeout(() => setShowPaymentModal(true), 0)
                 }}
                 className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-xs"
               >
@@ -355,7 +401,7 @@ export default function ProjectDetail() {
       {/* Unlock Report Modal */}
       {isUnlockModalOpen && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999]"
           onClick={() => setIsUnlockModalOpen(false)}
         >
           <div
@@ -374,9 +420,9 @@ export default function ProjectDetail() {
               <button
                 onClick={(e) => {
                   e.stopPropagation()
+                  setPaymentPrice(2.99)
                   setIsUnlockModalOpen(false)
-                  handleGenerateRiskReport()
-                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                  setTimeout(() => setShowPaymentModal(true), 0)
                 }}
                 className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-xs"
               >
@@ -389,21 +435,64 @@ export default function ProjectDetail() {
 
       {/* Payment Result Modal */}
       {showPaymentResult && createPortal(
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]" onClick={() => setShowPaymentResult(false)}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]" onClick={() => { if (!isGeneratingReport) setShowPaymentResult(false) }}>
           <div className="bg-zinc-900 rounded-lg p-4 w-80 mx-4 space-y-3 border border-[#343438]" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-center text-green-400">
-              <Check className="w-8 h-8" />
-            </div>
-            <p className="text-zinc-200 text-xs text-left leading-relaxed">{paymentResultMsg}</p>
-            <button
-              onClick={() => setShowPaymentResult(false)}
-              className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-xs font-medium"
-            >
-              知道了
-            </button>
+            {isGeneratingReport ? (
+              <>
+                <div className="flex justify-center py-4">
+                  <svg className="animate-spin h-10 w-10 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                </div>
+                <p className="text-zinc-200 text-xs text-center leading-relaxed">
+                  全景风险报告正在生成中，请稍候...
+                </p>
+                <p className="text-zinc-500 text-[12px] text-center">预计需要 10~30 秒</p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-center text-green-400">
+                  <Check className="w-8 h-8" />
+                </div>
+                <p className="text-zinc-200 text-xs text-left leading-relaxed">{paymentResultMsg}</p>
+                <button
+                  onClick={() => setShowPaymentResult(false)}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-xs font-medium"
+                >
+                  知道了
+                </button>
+              </>
+            )}
           </div>
         </div>,
         document.body
+      )}
+
+      {/* PaymentModal */}
+      {showPaymentModal && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          onPaymentSuccess={() => {
+            setShowPaymentModal(false)
+            // 更新报告时携带证据文本
+            if (paymentPrice < 2.99) {
+              let evidenceMsg = ""
+              if (evidenceImages.length > 0 || evidenceText.length > 0) {
+                evidenceMsg = `，已补充${evidenceImages.length}张图片、${evidenceText.length}字文本等证据`
+              }
+              setPaymentResultMsg(`正在更新全景风险报告${evidenceMsg}。`)
+              setShowPaymentResult(true)
+            }
+            handleGenerateRiskReport()
+          }}
+          price={paymentPrice}
+          reportType="risk"
+          userAddress={address || ''}
+          projectId={id || undefined}
+          priceType={paymentPrice < 2.99 ? 'update' : 'standard'}
+        />
       )}
     </div>
   )

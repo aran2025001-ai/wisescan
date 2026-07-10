@@ -59,7 +59,7 @@ export default function About() {
           {aboutSections.map((section, index) => (
             <div
               key={index}
-              className="bg-zinc-900 rounded-lg p-4 space-y-2"
+              className="bg-zinc-800 rounded-lg p-4 space-y-2"
             >
               <h2 className="text-white font-bold text-sm">{section.title}</h2>
               {section.content && (

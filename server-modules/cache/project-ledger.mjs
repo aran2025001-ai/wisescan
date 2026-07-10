@@ -26,9 +26,15 @@ async function getSupabase() {
   if (_supabase) return _supabase;
   try {
     const { createClient } = await import('@supabase/supabase-js');
+    // 🆕 v5.20: 优先使用 service role key，绕过 Storage RLS；fallback 到 anon key
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+    if (!key) {
+      console.warn('[Ledger] 无 Supabase key，降级为本地缓存');
+      return null;
+    }
     _supabase = createClient(
       process.env.VITE_SUPABASE_URL,
-      process.env.VITE_SUPABASE_ANON_KEY
+      key
     );
     return _supabase;
   } catch (e) {
@@ -126,7 +132,7 @@ export async function syncLocalCacheFromSupabase() {
   }
 }
 
-// ===== Tier 1: 报告缓存 =====
+// ===== Tier 1: 报告缓存（直接存 DB 字段，避免 Storage RLS 问题）=====
 
 /**
  * 检查报告缓存是否命中
@@ -136,7 +142,7 @@ export async function getReportCache(contractAddress) {
   const key = normalizeKey(contractAddress);
   if (!key || key === '未提供') return { hit: false, report: null, cachedAt: null };
 
-  // 优先 Supabase
+  // 优先 Supabase（DB 直接读完整报告 JSON）
   const supabase = await getSupabase();
   if (supabase) {
     try {
@@ -148,10 +154,11 @@ export async function getReportCache(contractAddress) {
       if (!error && data?.cached_report && data?.cached_at) {
         const cachedAt = new Date(data.cached_at).getTime();
         if (Date.now() - cachedAt < REPORT_CACHE_TTL_MS) {
-          console.log(`📦 [Ledger] Tier1 命中 (Supabase): ${key.slice(0,10)}...`);
+          console.log(`📦 [Ledger] Tier1 命中 (Supabase DB): ${key.slice(0,10)}...`);
           return { hit: true, report: data.cached_report, cachedAt: data.cached_at };
+        } else {
+          console.log(`⏰ [Ledger] Tier1 过期 (Supabase): ${key.slice(0,10)}...`);
         }
-        console.log(`⏰ [Ledger] Tier1 过期 (Supabase): ${key.slice(0,10)}...`);
       }
     } catch (e) {
       console.warn('[Ledger] Tier1 Supabase 查询失败:', e.message);
@@ -173,6 +180,7 @@ export async function getReportCache(contractAddress) {
 
 /**
  * 保存报告缓存
+ * 直接写入 project_facts.cached_report 字段（不再走 Storage，避免 RLS）
  */
 export async function setReportCache(contractAddress, reportData) {
   const key = normalizeKey(contractAddress);
@@ -180,7 +188,7 @@ export async function setReportCache(contractAddress, reportData) {
 
   const now = new Date().toISOString();
 
-  // Supabase
+  // Supabase DB 直接写完整 JSON
   const supabase = await getSupabase();
   if (supabase) {
     try {
@@ -190,7 +198,7 @@ export async function setReportCache(contractAddress, reportData) {
         cached_at: now,
         last_searched_at: now,
       }, { onConflict: 'contract_address' });
-      console.log(`💾 [Ledger] Tier1 已缓存 (Supabase): ${key.slice(0,10)}...`);
+      console.log(`💾 [Ledger] Tier1 已缓存 (Supabase DB): ${key.slice(0,10)}...`);
     } catch (e) {
       console.warn('[Ledger] Tier1 Supabase 写入失败:', e.message);
     }
@@ -204,18 +212,18 @@ export async function setReportCache(contractAddress, reportData) {
 
 /**
  * 清除报告缓存（Supabase + 本地）
- * 当新证据提交后调用，确保下次报告生成重新注入证据
  */
 export async function clearReportCache(contractAddress) {
   const key = normalizeKey(contractAddress);
   if (!key || key === '未提供') return;
 
-  // Supabase
+  // Supabase：清 cached_report 字段
   const supabase = await getSupabase();
   if (supabase) {
     try {
       await supabase.from('project_facts').update({
         cached_report: null,
+        cached_report_url: null,
         cached_at: null,
       }).eq('contract_address', key);
       console.log(`🗑️ [Ledger] Tier1 已清除 (Supabase): ${key.slice(0,10)}...`);

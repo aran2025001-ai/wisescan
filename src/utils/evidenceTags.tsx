@@ -39,6 +39,7 @@ export function parseEvidenceTags(text: string): Array<{ type: 'tag' | 'text'; v
 /** 渲染包含证据标签的文本，将标签替换为彩色徽章 */
 export function renderEvidenceTaggedText(text: string, textClass = "text-xs"): JSX.Element {
   if (!text) return <span className={textClass}>{text}</span>
+  if (typeof text !== 'string') return <span className={textClass}>{String(text)}</span>
   const parts = parseEvidenceTags(text)
   if (parts.length === 0) return <span className={textClass}>{text}</span>
   return (

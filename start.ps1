@@ -14,7 +14,7 @@ Write-Host ""
 # ---------- Step 1: Clean old ports ----------
 Write-Host "[1/3] Cleaning old processes..." -ForegroundColor Yellow
 
-$ports = @(3003, 5173, 5174)
+$ports = @(3002, 5173, 5174)
 foreach ($p in $ports) {
     $conn = Get-NetTCPConnection -LocalPort $p -ErrorAction SilentlyContinue
     if ($conn) {
@@ -27,12 +27,12 @@ foreach ($p in $ports) {
 Start-Sleep -Seconds 2
 
 # ---------- Step 2: Launch API Server ----------
-Write-Host "[2/3] Launching API Server (port 3003)..." -ForegroundColor Yellow
+Write-Host "[2/3] Launching API Server (port 3002)..." -ForegroundColor Yellow
 
 $apiWindow = Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",
-    "`$env:PORT='3003'; cd '$root'; Write-Host 'API Server :: Starting on http://localhost:3003' -ForegroundColor Green; Write-Host ''; node api/api-server.mjs"
+    "`$env:PORT='3002'; cd '$root'; Write-Host 'API Server :: Starting on http://localhost:3002' -ForegroundColor Green; Write-Host ''; node api/api-server.mjs"
 ) -PassThru
 
 Write-Host "  Waiting for API to be ready..." -ForegroundColor Gray
@@ -40,7 +40,7 @@ Write-Host "  Waiting for API to be ready..." -ForegroundColor Gray
 $apiReady = $false
 for ($i = 0; $i -lt 15; $i++) {
     try {
-        $res = Invoke-WebRequest -Uri "http://localhost:3003/api/health" -TimeoutSec 1 -ErrorAction Stop
+        $res = Invoke-WebRequest -Uri "http://localhost:3002/api/health" -TimeoutSec 1 -ErrorAction Stop
         if ($res.StatusCode -eq 200) {
             $apiReady = $true
             Write-Host "  API Server ready!" -ForegroundColor Green
@@ -97,7 +97,7 @@ if (-not $viteReady) {
 Write-Host ""
 Write-Host "=== All set! ===" -ForegroundColor Green
 Write-Host "  Frontend: http://localhost:5173/assess" -ForegroundColor Cyan
-Write-Host "  API:      http://localhost:3003/api/health" -ForegroundColor Cyan
+Write-Host "  API:      http://localhost:3002/api/health" -ForegroundColor Cyan
 Write-Host ""
 
 # Auto-open browser

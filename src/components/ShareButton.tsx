@@ -76,12 +76,6 @@ const Channels = [
     iconUrl: 'https://cdn.simpleicons.org/telegram/ffffff',
   },
   {
-    id: 'bluetooth',
-    label: '蓝牙',
-    iconBg: '#0078D7',
-    iconUrl: 'https://cdn.simpleicons.org/bluetooth/ffffff',
-  },
-  {
     id: 'more',
     label: '更多',
     iconBg: '#6B7280',
@@ -91,34 +85,6 @@ const Channels = [
         <circle cx="12" cy="5" r="2"/>
         <circle cx="12" cy="12" r="2"/>
         <circle cx="12" cy="19" r="2"/>
-      </svg>
-    ),
-  },
-]
-
-/** 底部操作按钮 */
-const Actions = [
-  {
-    id: 'save',
-    label: '保存',
-    iconBg: '#F0F0F0',
-    // 保存/软盘图标用内联 SVG
-    iconSvg: (
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#555" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
-        <polyline points="17 21 17 13 7 13 7 21"/>
-        <polyline points="7 3 7 8 15 8"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'close',
-    label: '取消',
-    iconBg: '#F0F0F0',
-    iconSvg: (
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#999" strokeWidth="2.5" strokeLinecap="round">
-        <line x1="18" y1="6" x2="6" y2="18"/>
-        <line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
     ),
   },
@@ -166,9 +132,9 @@ export default function ShareButton({ inviteCode, label, className = '', trigger
       .catch(() => setThumbnailSrc('/share-poster.png'))
   }, [showSheet, qrDataUrl])
 
-  /** 构建分享文案（动态域名 — URL 独占一行方便微信/QQ自动识别为链接） */
+  /** 构建分享文案 */
   const shareText = useMemo(() =>
-    `🔍 明鉴 WiseScan — 守护你的每一次投资决策\n项目风险评估、商业模式拆解，让你和专家一对一详聊项目细节。\n用Web3浏览器打开链接（如TP钱包等）：\n${baseUrl}/invite?code=${inviteCode || 'ABC123'}`,
+    `明鉴WiseScan — 守护你的每一次投资决策\n项目风险评估、商业模式拆解，让你和专家一对一详聊项目细节。\n用Web3浏览器打开链接（如TP钱包等）：\n${baseUrl}/invite?code=${inviteCode || 'ABC123'}`,
   [inviteCode, baseUrl])
   const shareUrl = useMemo(() =>
     `${baseUrl}/invite?code=${inviteCode || 'ABC123'}`,
@@ -196,20 +162,7 @@ export default function ShareButton({ inviteCode, label, className = '', trigger
 
     try {
       switch (method) {
-        // ── 1. 保存图片 ──
-        case 'save': {
-          const src = thumbnailSrc || '/share-poster.png'
-          const bgResp = await fetch(src)
-          const bgBlob = await bgResp.blob()
-          const a = document.createElement('a')
-          a.href = URL.createObjectURL(bgBlob)
-          a.download = `明鉴-邀请卡片-${inviteCode || 'share'}.png`
-          document.body.appendChild(a); a.click(); document.body.removeChild(a)
-          setToast('✅ 图片已保存')
-          return
-        }
-
-        // ── 2. 微信（复制文案 + 引导提示，不调 weixin:// 避免系统弹窗）──
+        // ── 1. 微信（复制文案 + 引导提示）──
         case 'wechat': {
           doCopy(shareText)
           setToast('📋 已复制！请打开微信\n选择聊天对象后粘贴发送')
@@ -241,30 +194,7 @@ export default function ShareButton({ inviteCode, label, className = '', trigger
           return
         }
 
-        // ── 6. 蓝牙 / 系统分享（纯文件分享，不走 Web Share 文案）──
-        case 'bluetooth': {
-          const src = thumbnailSrc || '/share-poster.png'
-          const bgResp = await fetch(src)
-          const bgBlob = await bgResp.blob()
-          const file = new File([bgBlob], `明鉴-邀请卡片-${inviteCode || 'share'}.png`, { type: 'image/png' })
-          // 优先 Web Share API（手机端可走蓝牙/附近分享）
-          if (navigator.share && navigator.canShare?.({ files: [file] })) {
-            try {
-              await navigator.share({ files: [file], title: '明鉴 WiseScan 邀请卡片' })
-              setToast('✅ 分享成功！')
-              return
-            } catch { /* 用户取消 → 降级 */ }
-          }
-          // PC 或不支持 → 下载 + 提示
-          const a = document.createElement('a')
-          a.href = URL.createObjectURL(bgBlob)
-          a.download = `明鉴-邀请卡片-${inviteCode || 'share'}.png`
-          document.body.appendChild(a); a.click(); document.body.removeChild(a)
-          setToast('图片已保存，可通过蓝牙发送至附近设备')
-          return
-        }
-
-        // ── 7. 更多（Web Share API 纯文案分享）──
+        // ── 5. 更多（Web Share API 纯文案分享）──
         case 'more': {
           if (navigator.share) {
             try {
@@ -312,12 +242,28 @@ export default function ShareButton({ inviteCode, label, className = '', trigger
   const handleConfirmOk = useCallback(() => {
     const ch = confirmModal.channel
     setConfirmModal({ open: false, channel: '' })
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
     if (ch === 'wechat') {
-      try { window.location.href = 'weixin://' } catch {}
-      setToast('正在打开微信...')
+      if (isMobile) {
+        // 手机端：尝试多种方式唤起微信
+        try { window.location.href = 'weixin://'; setToast('📋 文案已复制！正在打开微信...\n如未唤起请手动打开微信粘贴'); return } catch {}
+        // Android Intent fallback
+        try { window.location.href = 'intent://#Intent;scheme=weixin;package=com.tencent.mm;end'; return } catch {}
+        // 最终降级
+        setToast('📋 文案已复制！\n请打开微信选择好友后粘贴发送')
+      } else {
+        try { window.location.href = 'weixin://' } catch {}
+        setToast('正在打开微信...')
+      }
     } else if (ch === 'qq') {
-      try { window.location.href = 'mqqapi://' } catch {}
-      setToast('正在打开QQ...')
+      if (isMobile) {
+        try { window.location.href = 'mqqapi://'; setToast('📋 文案已复制！正在打开QQ...\n如未唤起请手动打开QQ粘贴'); return } catch {}
+        try { window.location.href = 'intent://#Intent;scheme=mqqapi;package=com.mobile.qq;end'; return } catch {}
+        setToast('📋 文案已复制！\n请打开QQ选择好友后粘贴发送')
+      } else {
+        try { window.location.href = 'mqqapi://' } catch {}
+        setToast('正在打开QQ...')
+      }
     }
   }, [confirmModal.channel])
 
@@ -418,22 +364,7 @@ export default function ShareButton({ inviteCode, label, className = '', trigger
                         onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}/>
                     )}
                   </div>
-                  <span className="text-[11px] text-gray-600 mt-0.5">{ch.label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* 底部操作 */}
-            <div className="flex justify-around pt-3 pb-1" style={{ borderTop: '1px solid rgba(0,0,0,0.05)' }}>
-              {Actions.map(act => (
-                <button key={act.id}
-                  onClick={() => act.id === 'close' ? setShowSheet(false) : doShare(act.id)}
-                  className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-sm"
-                    style={{ width: 48, height: 48, background: act.iconBg }}>
-                    {act.iconSvg}
-                  </div>
-                  <span className="text-xs text-gray-500">{act.label}</span>
+                  <span className="text-[13px] text-gray-600 mt-0.5">{ch.label}</span>
                 </button>
               ))}
             </div>

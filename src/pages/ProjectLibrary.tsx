@@ -264,17 +264,17 @@ export default function ProjectLibrary() {
               setShowFilterMenu(!showFilterMenu)
               setShowSortMenu(false)
             }}
-            className="flex w-full items-center rounded-lg bg-zinc-800 hover:bg-zinc-500 transition-colors"
+            className="flex w-full items-center rounded-lg bg-zinc-800 hover:bg-zinc-500 active:bg-zinc-400 active:scale-[0.97] transition-all duration-150"
           >
-            <span className="bg-zinc-700 px-2 py-1 rounded-l-lg text-xs font-medium whitespace-nowrap">筛选</span>
-            <span className="flex-1 px-2 py-1 text-left text-xs">
+            <span className="bg-zinc-700 px-2 py-2 rounded-l-lg text-xs font-medium whitespace-nowrap">筛选</span>
+            <span className="flex-1 px-2 py-2 text-left text-xs">
               {filterRisk === "all" ? "全部" : RISK_LEVELS.find((r) => r.value === filterRisk)?.label}
             </span>
             <ChevronDown className="h-3.5 w-3.5 mr-2 text-zinc-400" />
           </button>
 
           {showFilterMenu && (
-            <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-[#343438] bg-zinc-800 shadow-lg z-50">
+            <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-[#343438] bg-zinc-800 shadow-lg z-[99999]">
               {RISK_LEVELS.map((level) => (
                 <button
                   key={level.value}
@@ -301,10 +301,10 @@ export default function ProjectLibrary() {
               setShowSortMenu(!showSortMenu)
               setShowFilterMenu(false)
             }}
-            className="flex w-full items-center rounded-lg bg-zinc-800 hover:bg-zinc-500 transition-colors"
+            className="flex w-full items-center rounded-lg bg-zinc-800 hover:bg-zinc-500 active:bg-zinc-400 active:scale-[0.97] transition-all duration-150"
           >
-            <span className="bg-zinc-700 px-2 py-1 rounded-l-lg text-xs font-medium whitespace-nowrap">排序</span>
-            <span className="flex-1 px-2 py-1 text-left text-xs">
+            <span className="bg-zinc-700 px-2 py-2 rounded-l-lg text-xs font-medium whitespace-nowrap">排序</span>
+            <span className="flex-1 px-2 py-2 text-left text-xs">
               {SORT_OPTIONS.find((s) => s.value === sortBy)?.label}
               {" "}
               {getSortDirectionLabel(sortBy, sortAsc)} {sortAsc ? "↑" : "↓"}
@@ -313,7 +313,7 @@ export default function ProjectLibrary() {
           </button>
 
           {showSortMenu && (
-            <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-[#343438] bg-zinc-800 shadow-lg z-50">
+            <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-[#343438] bg-zinc-800 shadow-lg z-[99999]">
               {SORT_OPTIONS.map((option) => (
                 <button
                   key={option.value}
@@ -360,7 +360,7 @@ export default function ProjectLibrary() {
             <p className="text-center text-sm text-red-400">加载失败：{fetchError}</p>
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-300 transition-colors"
+              className="px-4 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 active:scale-[0.97] rounded-lg text-zinc-300 transition-all duration-150"
             >
               重试
             </button>
@@ -382,11 +382,13 @@ export default function ProjectLibrary() {
           <div className="space-y-1.5">
             {filteredProjects.map((project) => {
               const risk = getRiskBadge(project.riskLevel)
-              const formattedDate = new Date(project.lastEvaluatedAt).toISOString().slice(0, 10)
+              const formattedDate = project.lastEvaluatedAt
+                ? new Date(project.lastEvaluatedAt).toISOString().slice(0, 10)
+                : '尚未评估'
               return (
                 <div
                   key={project.id}
-                  className="rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors border border-[#343438] cursor-pointer group"
+                  className="rounded-lg bg-zinc-800 hover:bg-zinc-700 active:scale-[0.98] active:brightness-110 transition-all duration-150 border border-[#343438] cursor-pointer group"
                   onClick={() => navigate(`/library/${project.id}`)}
                 >
                   <div className="grid grid-cols-1 gap-1 p-2">
@@ -408,7 +410,7 @@ export default function ProjectLibrary() {
 
                     {/* Bottom Row: Assessment Count and Last Evaluation Time */}
                     <div className="flex items-center justify-between gap-2 pt-0.5">
-                      <div className="relative flex items-center gap-1 flex-shrink-0 whitespace-nowrap text-[10px] text-zinc-400">
+                      <div className="relative flex items-center gap-1 flex-shrink-0 whitespace-nowrap text-[12px] text-zinc-400">
                         <span>评估次数 {project.assessmentCount}</span>
                         <button
                           onClick={(e) => {
@@ -422,13 +424,13 @@ export default function ProjectLibrary() {
                         {showInfoPopover === project.id && (
                           <>
                             <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setShowInfoPopover(null) }} />
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 bg-zinc-800 border border-[#343438] rounded-lg p-2.5 w-44 shadow-lg whitespace-normal">
-                              <p className="text-zinc-300 text-xs leading-relaxed whitespace-normal">评估次数反映项目被查询的频率，不代表安全性</p>
+                            <div className="absolute bottom-full left-0 mb-2 z-50 bg-zinc-700 border border-zinc-600 rounded-lg p-2.5 max-w-[180px] w-max shadow-xl">
+                              <p className="text-zinc-100 text-xs leading-relaxed whitespace-normal break-words">评估次数反映项目被查询的频率，不代表安全性</p>
                             </div>
                           </>
                         )}
                       </div>
-                      <span className="flex-shrink-0 whitespace-nowrap text-[10px] text-zinc-400">
+                      <span className="flex-shrink-0 whitespace-nowrap text-[12px] text-zinc-400">
                         最后评估时间 {formattedDate}
                       </span>
                     </div>

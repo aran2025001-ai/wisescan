@@ -9,7 +9,7 @@
  */
 
 // ─── DuckDuckGo 搜索（完全免费，无需 API Key）───────────────
-async function duckDuckGoSearch(query, timeoutMs = 4000) {
+async function duckDuckGoSearch(query, timeoutMs = 10000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const qStart = Date.now();
@@ -81,7 +81,7 @@ async function duckDuckGoSearch(query, timeoutMs = 4000) {
 }
 
 // ─── Tavily 搜索 ────────────────────────────────────────
-async function tavilySearch(query, apiKey, timeoutMs = 4000) {
+async function tavilySearch(query, apiKey, timeoutMs = 8000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const qStart = Date.now();
@@ -170,10 +170,10 @@ function getDomainPriority(url) {
 // ─── 搜索降级调度器 ─────────────────────────────────────
 // 按顺序尝试 Tavily → DuckDuckGo
 // DuckDuckGo 独立超时（比 Tavily 长 2s，因为免费引擎响应慢）
-const DDG_TIMEOUT_MS = 8000;
+const DDG_TIMEOUT_MS = 10000;
 
 // 返回 { results: [...], answerText: '', engine: 'tavily'|'duckduckgo'|null }
-async function searchWithFallback(query, tavilyApiKey = null, timeoutMs = 4000, engineLog = []) {
+async function searchWithFallback(query, tavilyApiKey = null, timeoutMs = 8000, engineLog = []) {
   // 1. Tavily（有 API Key 时优先）
   if (tavilyApiKey) {
     const result = await tavilySearch(query, tavilyApiKey, timeoutMs);

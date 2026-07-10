@@ -161,7 +161,7 @@ export default function InviteLanding() {
         <p className="text-xs text-zinc-500">
           🔍 明鉴 WiseScan · Web3 项目风险速查
         </p>
-        <p className="text-[11px] text-zinc-600">
+        <p className="text-[13px] text-zinc-600">
           守护你的每一次投资决策
         </p>
       </div>

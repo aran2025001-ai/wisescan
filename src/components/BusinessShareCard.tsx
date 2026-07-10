@@ -15,6 +15,8 @@ export interface BusinessShareCardProps {
   reportData: any;
   width?: number;
   className?: string;
+  /** 二维码链接。传短链接（/s/xxx）或报告详情页链接。如果不传则自动用 /profile/business-models/:id */
+  qrCodeUrl?: string;
 }
 
 /** 通用截断（不加省略号） */
@@ -107,6 +109,7 @@ export const BusinessShareCard: React.FC<BusinessShareCardProps> = ({
   reportData,
   width = 375,
   className = '',
+  qrCodeUrl,
 }) => {
   const s = width / 375;
 
@@ -185,16 +188,19 @@ export const BusinessShareCard: React.FC<BusinessShareCardProps> = ({
   const watchPoints = cleanWatchPoints(watchPointsRaw);
 
   // ── 二维码链接 ──
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://wisescan.xyz';
+  // 优先使用外部传入的短链接（/s/xxx），否则用详情页 URL
+  const originRaw = typeof window !== 'undefined' ? window.location.origin : 'https://wisescan.xyz';
+  const LOCAL_PATTERN = /^(https?:\/\/)(localhost|127\.|192\.168\.|10\.|0\.0\.0\.0)/;
+  const baseUrl = LOCAL_PATTERN.test(originRaw) ? 'https://wisescan.xyz' : originRaw;
   const reportId = reportData?.id || '';
-  const qrUrl = reportId ? `${baseUrl}/business-report?id=${reportId}` : baseUrl;
+  const qrUrl = qrCodeUrl || (inviteCode ? `${baseUrl}/invite?code=${inviteCode}` : baseUrl);
 
-  /* 统一左边距 */
+  /* 统一左边距（恢复原始值，不左右移动） */
   const valLeft = Math.round(175 * s);
 
   return (
     <div
-      className={`relative overflow-hidden ${className}`}
+      className={`relative ${className}`}
       style={{
         width,
         aspectRatio: '1125 / 2000',
@@ -218,11 +224,12 @@ export const BusinessShareCard: React.FC<BusinessShareCardProps> = ({
           fontSize: projectName === '未命名' ? Math.round(12 * s) : Math.round(13 * s),
           fontWeight: 600,
           color: '#374151',
-          lineHeight: 1.3,
+          lineHeight: 1.5,
           textAlign: 'left',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
+          paddingBottom: Math.round(2 * s),
         }}>
           {projectName}
         </div>
@@ -238,11 +245,12 @@ export const BusinessShareCard: React.FC<BusinessShareCardProps> = ({
           fontSize: Math.round(12 * s),
           fontWeight: 500,
           color: '#374151',
-          lineHeight: 1.35,
+          lineHeight: 1.6,
           textAlign: 'left',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
+          paddingBottom: Math.round(2 * s),
         }}>
           {truncate(patternType, 16)}
         </div>
@@ -258,13 +266,14 @@ export const BusinessShareCard: React.FC<BusinessShareCardProps> = ({
           fontSize: Math.round(12 * s),
           fontWeight: 400,
           color: '#4B5563',
-          lineHeight: 1.45,
+          lineHeight: 1.6,
           textAlign: 'left',
           wordBreak: 'break-word',
           display: '-webkit-box',
           WebkitLineClamp: 2,
           WebkitBoxOrient: 'vertical',
           overflow: 'hidden',
+          paddingBottom: Math.round(2 * s),
         }}>
           {truncate(structure, 24)}
         </div>
@@ -280,13 +289,14 @@ export const BusinessShareCard: React.FC<BusinessShareCardProps> = ({
           fontSize: Math.round(12 * s),
           fontWeight: 400,
           color: '#4B5563',
-          lineHeight: 1.5,
+          lineHeight: 1.6,
           textAlign: 'left',
           wordBreak: 'break-word',
           display: '-webkit-box',
           WebkitLineClamp: 2,
           WebkitBoxOrient: 'vertical',
           overflow: 'hidden',
+          paddingBottom: Math.round(2 * s),
         }}>
           {ruleSummary}
         </div>
@@ -302,13 +312,14 @@ export const BusinessShareCard: React.FC<BusinessShareCardProps> = ({
           fontSize: Math.round(11.5 * s),
           fontWeight: 600,
           color: '#DC2626',
-          lineHeight: 1.5,
+          lineHeight: 1.6,
           textAlign: 'left',
           wordBreak: 'break-word',
           display: '-webkit-box',
           WebkitLineClamp: 2,
           WebkitBoxOrient: 'vertical',
           overflow: 'hidden',
+          paddingBottom: Math.round(2 * s),
         }}>
           {watchPoints.join(' · ')}
         </div>
@@ -317,7 +328,7 @@ export const BusinessShareCard: React.FC<BusinessShareCardProps> = ({
       {/* ═══ 二维码（右下角 · 初始位置）═══ */}
       <div style={{
         position: 'absolute',
-        right: Math.round(41 * s),   // ← 初始位置
+        right: Math.round(41 * s),   // ← 恢复原始位置
         bottom: Math.round(37 * s),  // ← 初始位置（不再乱动）
         width: Math.round(55 * s),
         height: Math.round(55 * s),

@@ -16,7 +16,7 @@ function generateShortReview(reportData: any): string {
   const codeDim = dims.find((d: any) => d.dimension?.includes('代码'))
   if (codeDim) {
     if (codeDim.score >= 18 || codeDim.deduction?.includes('无扣分')) positives.push('已完成审计')
-    else if (codeDim.score <= 8 || codeDim.deduction?.includes('未审计')) negatives.push('尚未完成审计')
+    else if (codeDim.score <= 8 || (codeDim.deduction?.includes('未审计') && !/无未审计/.test(codeDim.deduction))) negatives.push('尚未完成审计')
   }
   const funding = reportData.funding_record
   if (funding && funding !== '未知' && funding !== '无' && funding !== '--') positives.push('有融资记录')
@@ -24,10 +24,11 @@ function generateShortReview(reportData: any): string {
   const lp = reportData.onChainData?.goplus?.lpLockStatus || reportData.liquidity_lock
   if (lp === '已锁定') positives.push('LP已锁定')
   const teamDim = dims.find((d: any) => d.dimension?.includes('团队'))
-  if (teamDim?.deduction?.includes('匿名') || teamDim?.score <= 8) negatives.push('团队匿名')
+  if ((teamDim?.deduction?.includes('匿名') && !/未发现|无.*匿名|非匿名|不匿名/.test(teamDim.deduction)) || (teamDim?.score ?? 20) <= 8) negatives.push('团队匿名')
   const histDim = dims.find((d: any) => d.dimension?.includes('历史'))
-  if (histDim?.deduction?.includes('变更')) {
-    const changes = (reportData.history_mode_changes || '').toString()
+  const changes = (reportData.history_mode_changes || '').toString().trim()
+  const hasModeChange = changes && changes !== '无' && changes !== '0' && changes !== '0次' && !changes.startsWith('无')
+  if (hasModeChange || (histDim?.deduction && /模式变更\d+次|模式变更≥\d+次|变更\d+次/.test(histDim.deduction))) {
     const changeCount = parseInt(changes)
     if (!Number.isNaN(changeCount) && changeCount >= 2) negatives.push(`曾有过${changeCount}次模式变更`)
     else negatives.push('曾有过模式变更')
@@ -320,11 +321,11 @@ export default function RiskReportCard({
             <span className="text-red-500 text-lg leading-none mt-0.5">🚨</span>
             <div>
               <div className="text-red-400 font-semibold text-xs">检测到恶意特征</div>
-              <div className="text-zinc-300 text-[11px] mt-0.5">
+              <div className="text-zinc-300 text-[13px] mt-0.5">
                 该项目存在以下恶意特征：{reportData.malicious_features.features.join('、')}
               </div>
               {reportData.malicious_features.evidence && (
-                <div className="text-zinc-500 text-[10px] mt-1 leading-relaxed">
+                <div className="text-zinc-500 text-[12px] mt-1 leading-relaxed">
                   {reportData.malicious_features.evidence}
                 </div>
               )}

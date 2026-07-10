@@ -81,8 +81,37 @@ export default function InvitationRebate() {
   }
 
   const handleCopyLink = () => {
-    if (!inviteUrl) { setToastMessage('请先连接钱包'); return }
-    navigator.clipboard.writeText(inviteUrl).then(() => setToastMessage('链接已复制')).catch(() => setToastMessage('复制失败'))
+    if (!address) { setToastMessage('请先连接钱包'); return }
+    const code = inviteUrl.split('code=')[1] || ''
+    const linkToCopy = `明鉴WiseScan — 守护你的每一次投资决策\n项目风险评估、商业模式拆解，让你和专家一对一详聊项目细节。\n用Web3浏览器打开链接（如TP钱包等）：\n${window.location.origin}/invite?code=${code}`
+    // 兼容不支持 Clipboard API 的 WebView（如 TP 钱包）
+    try {
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(linkToCopy)
+          .then(() => setToastMessage('链接已复制，快去邀请好友吧'))
+          .catch(() => fallbackCopy(linkToCopy))
+      } else {
+        fallbackCopy(linkToCopy)
+      }
+    } catch {
+      fallbackCopy(linkToCopy)
+    }
+  }
+  const fallbackCopy = (text: string) => {
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.focus()
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+      setToastMessage('链接已复制，快去邀请好友吧')
+    } catch {
+      setToastMessage('复制失败，请手动复制链接')
+    }
   }
 
   return (
@@ -90,7 +119,7 @@ export default function InvitationRebate() {
       {/* Header */}
       <div className="sticky top-0 z-40 border-b border-[#343438] bg-black backdrop-blur">
         <div className="flex items-center justify-between px-4 py-2">
-          <button onClick={() => navigate('/profile')} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-zinc-800 transition-colors" aria-label="返回">
+          <button onClick={() => navigate('/profile')} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-zinc-800 active:bg-zinc-700 active:scale-[0.95] transition-all duration-150" aria-label="返回">
             <ChevronLeft className="h-5 w-5" />
           </button>
           <h1 className="text-sm font-semibold">邀请返佣</h1>
@@ -131,22 +160,22 @@ export default function InvitationRebate() {
           <div className="grid grid-cols-[1fr_auto] gap-3 mb-3">
             <input type="number" placeholder="输入提现金额" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)}
               className="h-10 px-3 py-2 bg-zinc-800 text-white text-xs rounded-lg border border-[#343438] placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 w-full" />
-            <button onClick={handleFillAll} className="h-10 px-4 border border-[#343438] bg-transparent text-white text-xs rounded-lg hover:bg-zinc-700 transition-colors">全部</button>
-            <button onClick={handleWithdraw} className="h-10 px-4 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition-colors w-full">提现</button>
-            <button onClick={() => navigate('/profile/withdrawal')} className="h-10 px-4 bg-transparent text-zinc-400 hover:text-white text-xs transition-colors whitespace-nowrap">提现历史</button>
+            <button onClick={handleFillAll} className="h-10 px-4 border border-[#343438] bg-transparent text-white text-xs rounded-lg hover:bg-zinc-700 active:bg-zinc-600 active:scale-[0.97] transition-all duration-150">全部</button>
+            <button onClick={handleWithdraw} className="h-10 px-4 bg-blue-500 hover:bg-blue-600 active:bg-blue-400 active:scale-[0.97] text-white text-sm font-semibold rounded-lg transition-all duration-150 w-full">提现</button>
+            <button onClick={() => navigate('/profile/withdrawal')} className="h-10 px-4 bg-transparent text-zinc-400 hover:text-white active:text-zinc-200 text-xs transition-colors whitespace-nowrap">提现历史</button>
           </div>
-          <div className="text-[10px] text-zinc-500 text-left mt-3">需满 5 USDT 才可提现，每月封顶 20 USDT，提现将在3个工作日内处理。</div>
+          <div className="text-[12px] text-zinc-500 text-left mt-3">需满 5 USDT 才可提现，每月封顶 20 USDT，提现将在3个工作日内处理。</div>
         </div>
 
         {/* Action Buttons */}
         <div className="flex gap-3 mb-6">
-          <button onClick={handleCopyLink} className="flex-1 h-10 border border-[#343438] bg-transparent text-blue-400 text-xs font-semibold rounded-lg hover:bg-blue-500/10 transition-colors flex items-center justify-center gap-2">
+          <button onClick={handleCopyLink} className="flex-1 h-10 border border-[#343438] bg-transparent text-blue-400 text-xs font-semibold rounded-lg hover:bg-blue-500/10 active:bg-blue-500/20 active:scale-[0.97] transition-all duration-150 flex items-center justify-center gap-2">
             <Copy size={16} /><span>复制邀请链接</span>
           </button>
           <ShareButton
             inviteCode={inviteUrl.split('code=')[1] || ''}
             label="邀请好友"
-            className="flex-1 h-10 border border-[#343438] bg-transparent text-blue-400 text-xs font-semibold rounded-lg hover:bg-blue-500/10 transition-colors flex items-center justify-center gap-2"
+            className="flex-1 h-10 border border-[#343438] bg-transparent text-blue-400 text-xs font-semibold rounded-lg hover:bg-blue-500/10 active:bg-blue-500/20 active:scale-[0.97] transition-all duration-150 flex items-center justify-center gap-2"
           />
         </div>
 
@@ -154,7 +183,7 @@ export default function InvitationRebate() {
         <div>
           <button
             onClick={() => setShowHistory(!showHistory)}
-            className="flex items-center justify-between w-full py-2 text-xs text-zinc-400 hover:text-white transition-colors"
+            className="flex items-center justify-between w-full py-2 text-xs text-zinc-400 hover:text-white active:text-zinc-200 transition-colors"
           >
             <span>邀请记录（{stats.invite_count}）</span>
             <span className={`transform transition-transform ${showHistory ? 'rotate-180' : ''}`}>▼</span>
@@ -170,7 +199,7 @@ export default function InvitationRebate() {
                       <User size={14} className="text-zinc-500 flex-shrink-0" />
                       <span className="text-xs text-zinc-300 font-mono truncate">{h.invitee?.slice(0, 8)}...</span>
                     </div>
-                    <span className="text-[10px] text-zinc-500 flex-shrink-0">{h.connected_at?.slice(0, 10) || h.created_at?.slice(0, 10)}</span>
+                    <span className="text-[12px] text-zinc-500 flex-shrink-0">{h.connected_at?.slice(0, 10) || h.created_at?.slice(0, 10)}</span>
                   </div>
                 ))
               )}
@@ -181,11 +210,11 @@ export default function InvitationRebate() {
 
       {/* Toast */}
       {toastMessage && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setToastMessage(null)}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999]" onClick={() => setToastMessage(null)}>
           <div className="bg-zinc-900 rounded-lg p-4 w-80 mx-4 space-y-3 border border-[#343438]" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-white font-semibold text-sm text-center">提示</h2>
             <p className="text-zinc-300 text-xs leading-relaxed text-left">{toastMessage}</p>
-            <button onClick={() => setToastMessage(null)} className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-xs">确定</button>
+            <button onClick={() => setToastMessage(null)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-500 active:scale-[0.97] text-white rounded-lg transition-all duration-150 text-sm">确定</button>
           </div>
         </div>
       )}
