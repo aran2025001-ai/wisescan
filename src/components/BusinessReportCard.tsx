@@ -350,26 +350,26 @@ export function BusinessReportCard({
     <div className="w-full bg-zinc-900 rounded-lg overflow-hidden">
       {/* Title Bar */}
       <div className="bg-gradient-to-r from-blue-950/50 to-purple-950/50 px-4 py-2 border-b border-[#343438]">
-        <h3 className="text-white font-semibold text-base text-center">商业模式拆解报告</h3>
-        <p className="text-zinc-400 text-xs mt-1 text-center">明鉴·首席分析师出品</p>
+        <h3 className="text-white font-semibold text-lg text-center">商业模式拆解报告</h3>
+        <p className="text-zinc-400 text-sm mt-1 text-center">明鉴·首席分析师出品</p>
       </div>
 
       <div className="p-4 space-y-6">
         {/* 1. 商业模式解读 */}
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-zinc-50">1. 商业模式解读</h3>
+          <h3 className="text-base font-semibold text-zinc-50">1. 商业模式解读</h3>
           {hasData ? (
-            <div className="text-xs text-zinc-50 leading-relaxed whitespace-pre-wrap">
-              {renderEvidenceTaggedText(reportData.plain_explanation || '（暂无解读）', "text-xs text-zinc-50 leading-relaxed whitespace-pre-wrap")}
+            <div className="text-sm text-zinc-50 leading-relaxed whitespace-pre-wrap">
+              {renderEvidenceTaggedText(reportData.plain_explanation || '（暂无解读）', "text-sm text-zinc-50 leading-relaxed whitespace-pre-wrap")}
             </div>
           ) : (
-            <p className="text-xs text-zinc-500 leading-relaxed italic">请先输入项目规则并点击"开始拆解"生成报告。</p>
+            <p className="text-sm text-zinc-500 leading-relaxed italic">请先输入项目规则并点击"开始拆解"生成报告。</p>
           )}
         </div>
 
         {/* 2. 静态收益计算器 */}
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-zinc-50">2. 静态投资收益计算器</h3>
+          <h3 className="text-base font-semibold text-zinc-50">2. 静态投资收益计算器</h3>
 
           {/* 产品 Tab 栏 */}
           {products.length > 1 && (
@@ -384,7 +384,7 @@ export function BusinessReportCard({
 
           {/* 产品信息 */}
           {activeProduct && (
-            <div className="text-xs text-zinc-500 bg-zinc-800/50 rounded px-2.5 py-1.5">
+            <div className="text-sm text-zinc-500 bg-zinc-800/50 rounded px-2.5 py-1.5">
               {activeProduct.description || activeProduct.name}
               {activeProduct.features?.length ? ` | 特性: ${activeProduct.features.join(', ')}` : ''}
               {/* 代币计价项目：不显示固定的 min_invest_usd，只显示代币数量 */}
@@ -406,25 +406,25 @@ export function BusinessReportCard({
           {/* 动态汇率输入（仅代币计价项目显示） */}
           {hasTokenUnit && (
             <div className="space-y-1">
-              <label className="text-xs text-zinc-400">当前 1{activeProduct?.investment_token} = 多少 U</label>
+              <label className="text-sm text-zinc-400">当前 1{activeProduct?.investment_token} = 多少 U</label>
               <input
                 type="number"
                 value={tokenPriceStr}
                 onChange={(e) => setTokenPriceStr(e.target.value)}
                 placeholder="请输入当前市场价，如 0.05"
-                className="w-full px-3 py-2 bg-zinc-800 text-zinc-50 text-sm rounded border border-[#343438] focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                className="w-full px-3 py-2 bg-zinc-800 text-zinc-50 text-base rounded border border-[#343438] focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <label className="text-xs text-zinc-400">投资金额 (USDT)</label>
+              <label className="text-sm text-zinc-400">投资金额 (USDT)</label>
               <input type="number" value={investmentStr} onChange={handleInvestmentChange}
-                className="w-full px-3 py-2 bg-zinc-800 text-zinc-50 text-sm rounded border border-[#343438] focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                className="w-full px-3 py-2 bg-zinc-800 text-zinc-50 text-base rounded border border-[#343438] focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-zinc-400">日收益率</label>
-              <div className="w-full px-3 py-2 bg-zinc-700 text-zinc-400 text-sm rounded border border-zinc-600">
+              <label className="text-sm text-zinc-400">日收益率</label>
+              <div className="w-full px-3 py-2 bg-zinc-700 text-zinc-400 text-base rounded border border-zinc-600">
                 {activeProduct
                   ? (dailyRate != null && dailyRate > 0 ? `${(dailyRate*100).toFixed(2)}%` : dailyRate === 0 ? '0%' : '未识别')
                   : (sc?.daily_rate != null && sc.daily_rate > 0 ? `${(sc.daily_rate*100).toFixed(2)}%` : '未识别')}
@@ -435,7 +435,7 @@ export function BusinessReportCard({
           {/* 周期选择 */}
           {cycles.length > 0 && (
             <div className="space-y-1">
-              <label className="text-xs text-zinc-400">周期</label>
+              <label className="text-sm text-zinc-400">周期</label>
               <div className="flex flex-wrap gap-1.5">
                 {cycles.map((c, i) => (
                   <button key={i} onClick={() => setActiveCycleIdx(i)}
@@ -448,7 +448,7 @@ export function BusinessReportCard({
 
           {/* 放大倍数 */}
           {hasAmp && (
-            <div className="text-xs text-zinc-400 bg-zinc-800/60 rounded px-2.5 py-1.5">
+            <div className="text-sm text-zinc-400 bg-zinc-800/60 rounded px-2.5 py-1.5">
               {amp.description || `充值${amp.recharge_times}倍，复投${amp.reinvest_times}倍`}
             </div>
           )}
@@ -457,7 +457,7 @@ export function BusinessReportCard({
           {specialSwitches.length > 0 && (
             <div className="space-y-1.5">
               {specialSwitches.map((s, i) => (
-                <label key={i} className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                <label key={i} className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
                   <input type="checkbox" checked={!!switchStates[s.name]} onChange={() => setSwitchStates(p => ({...p, [s.name]: !p[s.name]}))}
                     className="accent-blue-500" />
                   {s.name}：{s.description}
@@ -468,7 +468,7 @@ export function BusinessReportCard({
 
           {/* 收益表格 */}
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[#343438]">
                   <th className="text-left py-2 px-2 text-zinc-400">周期</th>
@@ -513,29 +513,29 @@ export function BusinessReportCard({
 
         {/* 3. 动态推广收益估算 */}
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-zinc-50">3. 动态推广收益估算</h3>
+          <h3 className="text-base font-semibold text-zinc-50">3. 动态推广收益估算</h3>
 
           {/* 新版：按收入规则渲染 */}
           {useNewEngine && dynRules.length > 0 ? dynRules.map((rule, ri) => {
             const results = calcDynamicRule(rule)
 
             return <div key={ri} className="bg-zinc-800/40 rounded p-2.5 space-y-2">
-              <p className="text-xs text-zinc-300 font-medium">{rule.name}</p>
+              <p className="text-sm text-zinc-300 font-medium">{rule.name}</p>
 
               {/* 代数制 — 有代数表才显示输入，否则只显示名称 */}
               {rule.method === 'generations' && rule.generation_table?.length > 0 && (
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="text-xs text-zinc-400">直推人数</label>
+                    <label className="text-sm text-zinc-400">直推人数</label>
                     <input type="number" value={dynInputs[`${rule.name}_directs`] || ''}
                       onChange={(e) => setDynInputs(p => ({...p, [`${rule.name}_directs`]: e.target.value}))}
-                      className="w-full px-2 py-1.5 bg-zinc-800 text-zinc-50 text-xs rounded border border-[#343438]" />
+                      className="w-full px-2 py-1.5 bg-zinc-800 text-zinc-50 text-sm rounded border border-[#343438]" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-zinc-400">每代业绩 (U)</label>
+                    <label className="text-sm text-zinc-400">每代业绩 (U)</label>
                     <input type="number" value={dynInputs[`${rule.name}_per_gen`] || ''}
                       onChange={(e) => setDynInputs(p => ({...p, [`${rule.name}_per_gen`]: e.target.value}))}
-                      className="w-full px-2 py-1.5 bg-zinc-800 text-zinc-50 text-xs rounded border border-[#343438]" />
+                      className="w-full px-2 py-1.5 bg-zinc-800 text-zinc-50 text-sm rounded border border-[#343438]" />
                   </div>
                 </div>
               )}
@@ -544,20 +544,20 @@ export function BusinessReportCard({
               {rule.method === 'tiers' && (
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="text-xs text-zinc-400">团队业绩 (U)</label>
+                    <label className="text-sm text-zinc-400">团队业绩 (U)</label>
                     <input type="number" value={dynInputs[`${rule.name}_perf`] || ''}
                       onChange={(e) => setDynInputs(p => ({...p, [`${rule.name}_perf`]: e.target.value}))}
-                      className="w-full px-2 py-1.5 bg-zinc-800 text-zinc-50 text-xs rounded border border-[#343438]" />
+                      className="w-full px-2 py-1.5 bg-zinc-800 text-zinc-50 text-sm rounded border border-[#343438]" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-zinc-400">你的等级</label>
+                    <label className="text-sm text-zinc-400">你的等级</label>
 
                     {/* 自定义下拉组件（兼容手机 WebView，不用原生 select） */}
                     <div className="relative" ref={el => { dropdownRefs.current[rule.name] = el }}>
                       <button
                         type="button"
                         onClick={() => setOpenDropdownRule(openDropdownRule === rule.name ? null : rule.name)}
-                        className="w-full px-2 py-1.5 bg-zinc-800 text-zinc-50 text-xs rounded border border-[#343438] text-left flex items-center justify-between"
+                        className="w-full px-2 py-1.5 bg-zinc-800 text-zinc-50 text-sm rounded border border-[#343438] text-left flex items-center justify-between"
                         style={{ WebkitAppearance: 'none', appearance: 'none' }}
                       >
                         <span>
@@ -584,7 +584,7 @@ export function BusinessReportCard({
                                   setDynInputs(p => ({...p, [`${rule.name}_tier_idx`]: String(ti)}))
                                   setOpenDropdownRule(null)
                                 }}
-                                className={`w-full text-left px-2.5 py-1.5 text-xs border-b border-zinc-700/50 last:border-b-0 ${isSelected ? 'bg-blue-600/30 text-blue-300' : 'bg-zinc-800 text-zinc-50 hover:bg-zinc-700'}`}
+                                className={`w-full text-left px-2.5 py-1.5 text-sm border-b border-zinc-700/50 last:border-b-0 ${isSelected ? 'bg-blue-600/30 text-blue-300' : 'bg-zinc-800 text-zinc-50 hover:bg-zinc-700'}`}
                               >
                                 {t.level || 'V' + (ti+1)}
                                 <span className="text-zinc-500 ml-1">— {(t.rate ? (t.rate*100).toFixed(0) : '—')}%</span>
@@ -615,7 +615,7 @@ export function BusinessReportCard({
               {results.length > 0 && (
                 <div className="bg-zinc-900 rounded p-2 space-y-1">
                   {results.map((r, i) => (
-                    <div key={i} className="flex justify-between text-xs text-zinc-50">
+                    <div key={i} className="flex justify-between text-sm text-zinc-50">
                       <span>{r.label}</span>
                       <span className="font-medium text-blue-400">{r.value}</span>
                     </div>
@@ -625,7 +625,7 @@ export function BusinessReportCard({
 
               {/* 公式说明 */}
               {rule.formula && (
-                <details className="text-xs">
+                <details className="text-sm">
                   <summary className="text-zinc-500 cursor-pointer">公式说明</summary>
                   <p className="mt-1 text-zinc-400">{rule.formula}</p>
                   {rule.formula_example && <p className="text-zinc-500 mt-0.5">例：{rule.formula_example}</p>}
@@ -637,9 +637,9 @@ export function BusinessReportCard({
           {/* 特殊机制展示 */}
           {de?.special_mechs?.length ? (
             <div className="bg-yellow-900/10 rounded p-2 space-y-1">
-              <p className="text-xs text-yellow-500 font-medium">特殊机制</p>
+              <p className="text-sm text-yellow-500 font-medium">特殊机制</p>
               {de.special_mechs.map((m, i) => (
-                <p key={i} className="text-xs text-zinc-400">• {m.name}：{m.description}</p>
+                <p key={i} className="text-sm text-zinc-400">• {m.name}：{m.description}</p>
               ))}
             </div>
           ) : null}
@@ -649,22 +649,22 @@ export function BusinessReportCard({
             <>
               <div className="grid grid-cols-3 gap-2">
                 <div className="space-y-1">
-                  <label className="text-xs text-zinc-400">直推人数</label>
+                  <label className="text-sm text-zinc-400">直推人数</label>
                   <input type="number" value={directReferralsStr} onChange={(e) => setDirectReferralsStr(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-zinc-800 text-zinc-50 text-xs rounded border border-[#343438]" />
+                    className="w-full px-2 py-1.5 bg-zinc-800 text-zinc-50 text-sm rounded border border-[#343438]" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-zinc-400">间推人数</label>
+                  <label className="text-sm text-zinc-400">间推人数</label>
                   <input type="number" value={indirectReferralsStr} onChange={(e) => setIndirectReferralsStr(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-zinc-800 text-zinc-50 text-xs rounded border border-[#343438]" />
+                    className="w-full px-2 py-1.5 bg-zinc-800 text-zinc-50 text-sm rounded border border-[#343438]" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-zinc-400">人均投资 (U)</label>
+                  <label className="text-sm text-zinc-400">人均投资 (U)</label>
                   <input type="number" value={perPersonAmountStr} onChange={(e) => setPerPersonAmountStr(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-zinc-800 text-zinc-50 text-xs rounded border border-[#343438]" />
+                    className="w-full px-2 py-1.5 bg-zinc-800 text-zinc-50 text-sm rounded border border-[#343438]" />
                 </div>
               </div>
-              <div className="bg-zinc-800 rounded p-2.5 space-y-1.5 text-xs">
+              <div className="bg-zinc-800 rounded p-2.5 space-y-1.5 text-sm">
                 <div className="flex justify-between text-zinc-50">
                   <span>直推奖励({(directRate*100).toFixed(0)}%)</span>
                   <span className="font-medium">{Math.round(directBonus)} USDT</span>
@@ -685,18 +685,18 @@ export function BusinessReportCard({
         {/* 4. 策略建议 */}
         {hasData && reportData.strategy_suggestion && (
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-zinc-50 flex items-center gap-1.5">
+            <h3 className="text-base font-semibold text-zinc-50 flex items-center gap-1.5">
               <Lightbulb className="w-4 h-4 text-yellow-400" />
               4. 策略建议与点位布局
             </h3>
-            <div className="text-xs text-zinc-50 leading-relaxed whitespace-pre-wrap">
-              {renderEvidenceTaggedText(reportData.strategy_suggestion, "text-xs text-zinc-50 leading-relaxed whitespace-pre-wrap")}
+            <div className="text-sm text-zinc-50 leading-relaxed whitespace-pre-wrap">
+              {renderEvidenceTaggedText(reportData.strategy_suggestion, "text-sm text-zinc-50 leading-relaxed whitespace-pre-wrap")}
             </div>
             {reportData.visualization_tree ? (
               <div className="bg-zinc-800/60 rounded-lg p-3 border border-zinc-700/50 mt-2">
                 <div className="flex items-center gap-1.5 mb-2">
                   <Users className="w-3.5 h-3.5 text-blue-400" />
-                  <span className="text-xs text-zinc-400">点位布局图</span>
+                  <span className="text-sm text-zinc-400">点位布局图</span>
                 </div>
                 <ReactECharts
                   option={buildTreeOption(reportData.visualization_tree)}
@@ -705,8 +705,8 @@ export function BusinessReportCard({
                 />
               </div>
             ) : reportData.visualization_hint ? (
-              <div className="bg-zinc-800 rounded p-2.5 text-xs text-zinc-50 font-mono space-y-1 whitespace-pre-wrap">
-                {renderEvidenceTaggedText(reportData.visualization_hint, "text-xs text-zinc-50 font-mono whitespace-pre-wrap")}
+              <div className="bg-zinc-800 rounded p-2.5 text-sm text-zinc-50 font-mono space-y-1 whitespace-pre-wrap">
+                {renderEvidenceTaggedText(reportData.visualization_hint, "text-sm text-zinc-50 font-mono whitespace-pre-wrap")}
               </div>
             ) : null}
           </div>
@@ -715,13 +715,13 @@ export function BusinessReportCard({
         {/* 5. 风险警示 */}
         {hasData && (reportData.risk_warning || reportData.risk_assessment) && (
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-zinc-50 flex items-center gap-1.5">
+            <h3 className="text-base font-semibold text-zinc-50 flex items-center gap-1.5">
               <ShieldAlert className="w-4 h-4 text-yellow-500" />
               5. 风险警示
             </h3>
             {reportData.risk_assessment?.level && (
               <div className="flex items-center gap-2 bg-red-900/20 rounded-t-lg px-3 py-1.5 border border-red-800/50 border-b-0">
-                <span className="text-xs font-semibold text-red-400">风险等级：</span>
+                <span className="text-sm font-semibold text-red-400">风险等级：</span>
                 <span className={`text-xs font-bold px-2 py-0.5 rounded ${
                   reportData.risk_assessment.level === '高风险' ? 'bg-red-600/30 text-red-300' :
                   reportData.risk_assessment.level === '中风险' ? 'bg-yellow-600/30 text-yellow-300' :
@@ -731,10 +731,10 @@ export function BusinessReportCard({
             )}
             <div className="flex items-start gap-2 bg-yellow-900/20 rounded-lg p-3 border border-yellow-700/50">
               <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0 mt-0.5" />
-              <div className="space-y-2 text-xs">
+              <div className="space-y-2 text-sm">
                 {reportData.risk_warning && (
                   <div className="text-yellow-400 leading-relaxed">
-                    {renderEvidenceTaggedText(reportData.risk_warning, "text-xs text-yellow-400 leading-relaxed")}
+                    {renderEvidenceTaggedText(reportData.risk_warning, "text-sm text-yellow-400 leading-relaxed")}
                   </div>
                 )}
                 {reportData.risk_assessment?.triggers?.map((t, i) => (
@@ -755,13 +755,13 @@ export function BusinessReportCard({
 
         {/* 6. Disclaimer + Buttons */}
         <div className="space-y-2">
-          <p className="text-xs text-zinc-500">以上分析基于您提供的规则文本，动静态分析仅供参考，不构成投资建议。</p>
+          <p className="text-sm text-zinc-500">以上分析基于您提供的规则文本，动静态分析仅供参考，不构成投资建议。</p>
           <div className="border-t border-[#343438] -mx-4"></div>
 
           <BusinessShareDrawer
             reportData={reportData}
             trigger={
-              <button className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-xs font-medium py-2.5 rounded-full transition-colors">
+              <button className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-sm font-medium py-2.5 rounded-full transition-colors">
                 分享拆解结果
               </button>
             }
@@ -770,7 +770,7 @@ export function BusinessReportCard({
           {!hideAssessRisk && (
             <button
               onClick={() => setIsAssessRiskModalOpen(true)}
-              className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-xs font-medium py-2.5 rounded-full transition-colors"
+              className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-sm font-medium py-2.5 rounded-full transition-colors"
             >
               评估该项目风险
             </button>
@@ -781,11 +781,11 @@ export function BusinessReportCard({
         {isAssessRiskModalOpen && createPortal(
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99999]" onClick={() => setIsAssessRiskModalOpen(false)}>
             <div className="bg-zinc-900 rounded-lg p-4 w-80 mx-4 space-y-3 border border-[#343438]" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-white font-semibold text-sm text-center">评估该项目风险</h3>
-              <p className="text-zinc-300 text-xs leading-relaxed text-left">将跳转到项目安全评估页面，对该项目进行安全评估。</p>
+              <h3 className="text-white font-semibold text-base text-center">评估该项目风险</h3>
+              <p className="text-zinc-300 text-sm leading-relaxed text-left">将跳转到项目安全评估页面，对该项目进行安全评估。</p>
               <div className="flex gap-3 pt-1">
-                <button onClick={() => setIsAssessRiskModalOpen(false)} className="flex-1 py-1.5 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-xs">取消</button>
-                <button onClick={() => { setIsAssessRiskModalOpen(false); onAssessRisk?.() }} className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-xs">确认跳转</button>
+                <button onClick={() => setIsAssessRiskModalOpen(false)} className="flex-1 py-1.5 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-sm">取消</button>
+                <button onClick={() => { setIsAssessRiskModalOpen(false); onAssessRisk?.() }} className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm">确认跳转</button>
               </div>
             </div>
           </div>,

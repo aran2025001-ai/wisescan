@@ -5630,7 +5630,7 @@ async function handleProjectsUpsert(req, res) {
 async function handleInviteGenerate(req, res) {
   try {
     const urlObj = new URL(req.url, `http://${req.headers.host}`);
-    const user_address = urlObj.searchParams.get('user_address');
+    const user_address = urlObj.searchParams.get('user_address') || urlObj.searchParams.get('address');
     if (!user_address) return jsonRes(res, 400, { error: 'user_address is required' });
 
     const supabase = await getSupabase();
@@ -5643,8 +5643,16 @@ async function handleInviteGenerate(req, res) {
 
     const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
     const invite_code = addr.slice(2, 6).toUpperCase() + suffix;
-    const { error: insErr } = await supabase.from('invitations').insert({ inviter: addr, invitee: '', invite_code });
-    if (insErr) throw insErr;
+    const { error: insErr } = await supabase.from('invitations').insert({ inviter: addr, invite_code });
+    if (insErr) {
+      // ⚠️ 唯一约束冲突（invitee 字段有 UNIQUE 时 '' 会重复）
+      //    降级：再查一次是否已有邀请码
+      const { data: retry } = await supabase.from('invitations').select('invite_code').eq('inviter', addr).maybeSingle();
+      if (retry) {
+        return jsonRes(res, 200, { invite_code: retry.invite_code, invite_url: `https://wisescan.xyz/invite?code=${retry.invite_code}` });
+      }
+      throw insErr;
+    }
 
     return jsonRes(res, 200, { invite_code, invite_url: `https://wisescan.xyz/invite?code=${invite_code}` });
   } catch (err) {

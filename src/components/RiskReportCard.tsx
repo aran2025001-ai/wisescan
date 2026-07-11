@@ -224,8 +224,8 @@ export default function RiskReportCard({
     <div className="w-full bg-zinc-900 rounded-lg border border-[#343438] max-w-sm mx-auto">
       {/* 报告标题 */}
       <div className="bg-gradient-to-r from-blue-950/50 to-purple-950/50 px-4 py-3 border-b border-[#343438] text-center">
-        <h3 className="text-white font-semibold text-base">全景风险报告 - {projectName}</h3>
-        <p className="text-zinc-400 text-xs mt-1">明鉴·风险洞察官出品</p>
+        <h3 className="text-white font-semibold text-lg">全景风险报告 - {projectName}</h3>
+        <p className="text-zinc-400 text-sm mt-1">明鉴·风险洞察官出品</p>
       </div>
 
       {/* 项目基本情报 */}
@@ -245,10 +245,10 @@ export default function RiskReportCard({
 
       {/* 六维雷达图 */}
       <div className="px-4 py-3 border-b border-[#343438] bg-zinc-800/50">
-        <h4 className="text-white font-semibold text-sm mb-2 text-center">六维雷达图</h4>
+        <h4 className="text-white font-semibold text-base mb-2 text-center">六维雷达图</h4>
         <RadarChart scores={radarScores} actualScores={radarActualScores} labels={dimensions.map(d => d.dimension)} />
         {dimsWithNullScore.length > 0 && (
-          <p className="text-[#6B7280] text-xs text-center mt-2">
+          <p className="text-[#6B7280] text-sm text-center mt-2">
             {dimsWithNullScore.join("、")} 等维度数据采集中
           </p>
         )}
@@ -260,19 +260,19 @@ export default function RiskReportCard({
           const hasScore = typeof item.score === 'number' && !Number.isNaN(item.score)
           return (
           <div key={i} className={`text-sm ${i > 0 ? "border-t border-[#343438] pt-3" : ""}`}>
-            <p className="text-blue-400 font-semibold text-xs mb-1">{item.dimension}（{item.max} 分）</p>
+            <p className="text-blue-400 font-semibold text-sm mb-1">{item.dimension}（{item.max} 分）</p>
             <p className={`text-xs mb-1 ${hasScore ? 'text-zinc-300' : 'text-[#6B7280]'}`}>
               得分：{hasScore ? `${item.score} / ${item.max}` : `— / ${item.max}`}
             </p>
-            <p className="text-zinc-400 text-xs">扣分项：{renderEvidenceTaggedText(item.deduction, "text-zinc-400 text-xs")}</p>
+            <p className="text-zinc-400 text-sm">扣分项：{renderEvidenceTaggedText(item.deduction, "text-zinc-400 text-sm")}</p>
           </div>
         )})}
       </div>
 
       {/* 互联网舆情监测摘要 */}
       <div className="px-4 py-3 border-t border-[#343438] bg-zinc-800/30">
-        <h4 className="text-white font-semibold text-sm mb-3 text-center">互联网舆情监测摘要</h4>
-        <div className="space-y-3 text-xs">
+        <h4 className="text-white font-semibold text-base mb-3 text-center">互联网舆情监测摘要</h4>
+        <div className="space-y-3 text-sm">
           {negativeKeywords.length > 0 && (
             <div>
               <p className="text-zinc-300 mb-1">负面关键词：</p>
@@ -288,20 +288,20 @@ export default function RiskReportCard({
 
       {/* 综合评分与风险等级 */}
       <div className="px-4 py-3 border-t border-[#343438] bg-zinc-800/30 space-y-3">
-        <h4 className="text-white font-semibold text-sm text-center">综合评分与风险等级</h4>
-        <div className="flex justify-between items-center text-xs">
+        <h4 className="text-white font-semibold text-base text-center">综合评分与风险等级</h4>
+        <div className="flex justify-between items-center text-sm">
           <span className="text-zinc-300 shrink-0">综合评分</span>
           {hasRealTotalScore ? (
             <span className={`font-bold ml-2 text-right ${totalScore >= 70 ? "text-green-500" : totalScore >= 50 ? "text-yellow-500" : "text-red-500"}`}>{totalScore} / 100</span>
           ) : (
-            <span className="text-[#6B7280] text-xs">评估中，请稍后刷新</span>
+            <span className="text-[#6B7280] text-sm">评估中，请稍后刷新</span>
           )}
         </div>
-        <div className="flex justify-between items-center text-xs">
+        <div className="flex justify-between items-center text-sm">
           <span className="text-zinc-300 shrink-0">风险等级</span>
           <span className={`font-bold ml-2 text-right ${totalScore >= 70 ? "text-green-500" : totalScore >= 50 ? "text-yellow-500" : "text-red-500"}`}>{riskLevel}</span>
         </div>
-        <div className="flex items-center text-xs">
+        <div className="flex items-center text-sm">
           <span className="text-zinc-300 shrink-0 mr-2">建议</span>
           <span className={`font-bold text-right flex-1 ${conclusion === "可以参与" ? "text-green-500" : conclusion === "谨慎参与" ? "text-yellow-500" : "text-red-500"}`}>
             {conclusion === "可以参与" ? "✅" : conclusion === "谨慎参与" ? "⚠️" : "❌"} {conclusion}
@@ -318,9 +318,9 @@ export default function RiskReportCard({
       {reportData?.malicious_features?.detected && (
         <div className="bg-red-900/30 border-t border-red-500/50 px-4 py-3">
           <div className="flex items-start gap-2">
-            <span className="text-red-500 text-lg leading-none mt-0.5">🚨</span>
+            <span className="text-red-500 text-xl leading-none mt-0.5">🚨</span>
             <div>
-              <div className="text-red-400 font-semibold text-xs">检测到恶意特征</div>
+              <div className="text-red-400 font-semibold text-sm">检测到恶意特征</div>
               <div className="text-zinc-300 text-[13px] mt-0.5">
                 该项目存在以下恶意特征：{reportData.malicious_features.features.join('、')}
               </div>
@@ -336,16 +336,16 @@ export default function RiskReportCard({
 
       {/* AI 综合解读 */}
       <div className="px-4 py-3 border-t border-[#343438] bg-zinc-800/30">
-        <h4 className="text-white font-semibold text-sm mb-2 text-center">明鉴·风险洞察官综合解读</h4>
-        <div className="text-zinc-200 text-xs leading-relaxed">
-          {renderEvidenceTaggedText(aiSummary, "text-zinc-200 text-xs leading-relaxed")}
+        <h4 className="text-white font-semibold text-base mb-2 text-center">明鉴·风险洞察官综合解读</h4>
+        <div className="text-zinc-200 text-sm leading-relaxed">
+          {renderEvidenceTaggedText(aiSummary, "text-zinc-200 text-sm leading-relaxed")}
         </div>
       </div>
 
       {/* 免责声明 */}
       <div className="px-4 py-3 border-t border-[#343438] bg-zinc-700/20">
-        <h4 className="text-white font-semibold text-sm mb-2 text-center">免责声明</h4>
-        <p className="text-zinc-300 text-xs leading-relaxed">
+        <h4 className="text-white font-semibold text-base mb-2 text-center">免责声明</h4>
+        <p className="text-zinc-300 text-sm leading-relaxed">
           本报告基于公开信息生成，仅供参考，不构成投资建议。用户应自行核实并承担风险。
         </p>
       </div>
@@ -364,19 +364,19 @@ export default function RiskReportCard({
           completenessLevel={completenessLevel}
           review={generateShortReview(reportData)}
           label="分享项目情报"
-          className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-xs font-medium py-2.5 rounded-full transition-colors"
+          className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-sm font-medium py-2.5 rounded-full transition-colors"
         />
 
         <div className="flex gap-2">
           <button
             onClick={() => onUpdateRiskReport?.()}
-            className="flex-1 flex items-center justify-center bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-xs font-medium py-2.5 rounded-full transition-colors"
+            className="flex-1 flex items-center justify-center bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-sm font-medium py-2.5 rounded-full transition-colors"
           >
             更新风险报告
           </button>
           <button
             onClick={() => onAnalyzeBusinessModel?.()}
-            className="flex-1 flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-xs font-medium py-2.5 rounded-full transition-colors"
+            className="flex-1 flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-sm font-medium py-2.5 rounded-full transition-colors"
           >
             分析该项目的商业模式
           </button>

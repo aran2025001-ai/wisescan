@@ -347,18 +347,18 @@ export default function ProjectInfoCard({
   return (
     <div className={isEmbedded ? "px-4 py-3 space-y-3" : "bg-zinc-800 rounded-lg border border-[#343438] p-4 space-y-4 w-full"}>
       <div className={isEmbedded ? "" : "border-b border-[#343438] pb-4"}>
-        <h3 className="text-white font-semibold text-sm text-center">项目基本情报</h3>
+        <h3 className="text-white font-semibold text-base text-center">项目基本情报</h3>
       </div>
 
       <div className="space-y-3">
         <div className="flex justify-between items-start">
-          <span className="text-zinc-400 text-xs">项目名称</span>
-          <span className="text-white text-xs font-medium">{projectName}</span>
+          <span className="text-zinc-400 text-sm">项目名称</span>
+          <span className="text-white text-sm font-medium">{projectName}</span>
         </div>
         <div className="flex justify-between items-start gap-3">
-          <span className="text-zinc-400 text-xs flex-shrink-0">合约地址</span>
+          <span className="text-zinc-400 text-sm flex-shrink-0">合约地址</span>
           <div className="flex items-center gap-1 flex-1">
-            <span className="text-white text-xs font-mono break-all">{contractAddress}</span>
+            <span className="text-white text-sm font-mono break-all">{contractAddress}</span>
             <button onClick={handleCopyAddress} className="text-zinc-400 hover:text-white transition-colors p-0.5 flex-shrink-0" title="复制地址">
               {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
@@ -366,35 +366,35 @@ export default function ProjectInfoCard({
         </div>
 
         <div className="flex justify-between items-start">
-          <span className="text-zinc-400 text-xs">流动性锁仓</span>
+          <span className="text-zinc-400 text-sm">流动性锁仓</span>
           {lockRender ? (
             <span className={`text-xs font-medium ${lockRender.color}`}>{lockRender.icon} {lockRender.text}</span>
           ) : (
-            <span className="text-[#6B7280] text-xs font-medium">--</span>
+            <span className="text-[#6B7280] text-sm font-medium">--</span>
           )}
         </div>
         <div className="flex justify-between items-start">
-          <span className="text-zinc-400 text-xs">TOP10 持仓占比</span>
+          <span className="text-zinc-400 text-sm">TOP10 持仓占比</span>
           {top10Render ? (
             <span className={`text-xs font-medium ${top10Render.color}`}>{top10Render.icon} {top10Render.text}</span>
           ) : (
-            <span className="text-[#6B7280] text-xs font-medium">--</span>
+            <span className="text-[#6B7280] text-sm font-medium">--</span>
           )}
         </div>
         <div className="flex justify-between items-start">
-          <span className="text-zinc-400 text-xs">信息完整性评分</span>
+          <span className="text-zinc-400 text-sm">信息完整性评分</span>
           <div className="flex items-center gap-1">
-            <span className="text-white text-xs font-medium">{displayScore}%</span>
-            <span className="text-zinc-500 text-xs">{displayLabel}</span>
+            <span className="text-white text-sm font-medium">{displayScore}%</span>
+            <span className="text-zinc-500 text-sm">{displayLabel}</span>
           </div>
         </div>
         <div className="bg-zinc-700 bg-opacity-50 rounded p-2 mt-1">
-          <div className="text-zinc-400 text-xs mb-1">明鉴·风险洞察官简短点评</div>
-          <p className="text-white font-semibold text-xs">{shortReview}</p>
+          <div className="text-zinc-400 text-sm mb-1">明鉴·风险洞察官简短点评</div>
+          <p className="text-white font-semibold text-sm">{shortReview}</p>
         </div>
         <div className="flex justify-between items-center pt-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-zinc-400 text-xs">评估次数</span>
+            <span className="text-zinc-400 text-sm">评估次数</span>
             <div className="relative">
               <button className="text-zinc-400 hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); setShowInfoPopover(!showInfoPopover) }}>
                 <Info className="w-3.5 h-3.5" />
@@ -403,26 +403,26 @@ export default function ProjectInfoCard({
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowInfoPopover(false)} />
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-[99999] bg-zinc-800 border border-[#343438] rounded-lg p-2.5 w-48 shadow-lg">
-                    <p className="text-zinc-300 text-xs leading-relaxed">评估次数反映项目被查询的频率，不代表安全性</p>
+                    <p className="text-zinc-300 text-sm leading-relaxed">评估次数反映项目被查询的频率，不代表安全性</p>
                   </div>
                 </>
               )}
             </div>
           </div>
-          <span className="text-white text-xs font-medium">{(assessmentCount || 0).toLocaleString()} 次</span>
+          <span className="text-white text-sm font-medium">{(assessmentCount || 0).toLocaleString()} 次</span>
         </div>
         <div className="flex justify-between items-start">
-          <span className="text-zinc-400 text-xs">最后评估时间</span>
-          <span className="text-white text-xs font-medium">{lastEvaluation || "--"}</span>
+          <span className="text-zinc-400 text-sm">最后评估时间</span>
+          <span className="text-white text-sm font-medium">{lastEvaluation || "--"}</span>
         </div>
         <div className="flex justify-between items-start">
-          <span className="text-zinc-400 text-xs">关联代币</span>
-          <button onClick={() => setIsTokenExpanded(!isTokenExpanded)} className="text-blue-400 hover:text-blue-300 transition-colors text-xs font-medium">
+          <span className="text-zinc-400 text-sm">关联代币</span>
+          <button onClick={() => setIsTokenExpanded(!isTokenExpanded)} className="text-blue-400 hover:text-blue-300 transition-colors text-sm font-medium">
             {linkedToken || '--'}
           </button>
         </div>
         {isTokenExpanded && linkedToken && (
-          <div className="text-zinc-300 text-xs">
+          <div className="text-zinc-300 text-sm">
             {effectiveOnChain?.tokenName && effectiveOnChain.tokenName !== '未知' ? `${effectiveOnChain.tokenName} (${linkedToken})` : linkedToken}
             {effectiveOnChain?.totalSupply && effectiveOnChain.totalSupply !== '0' ? ` · 总供应量: ${effectiveOnChain.totalSupply}` : ''}
           </div>
@@ -439,8 +439,8 @@ export default function ProjectInfoCard({
             <div className="w-full rounded-3xl mb-3 px-3 py-2.5 flex items-center gap-3 bg-gradient-to-r from-blue-950/50 to-purple-950/50 hover:bg-zinc-700 transition-colors">
               <Gift className="w-5 h-5 flex-shrink-0 text-blue-400" />
               <div className="flex-1">
-                <div className="text-xs text-zinc-200">邀请一位朋友，立得 2.99U 代金券</div>
-                <div className="text-xs text-zinc-500">可抵扣本次支付</div>
+                <div className="text-sm text-zinc-200">邀请一位朋友，立得 2.99U 代金券</div>
+                <div className="text-sm text-zinc-500">可抵扣本次支付</div>
               </div>
               <ChevronRight className="w-5 h-5 flex-shrink-0 text-zinc-500" />
             </div>
@@ -454,7 +454,7 @@ export default function ProjectInfoCard({
           <div className="flex items-center gap-2">
             <button
               onClick={handleOpenEvidenceModal}
-              className="text-blue-400 hover:text-blue-300 text-xs underline underline-offset-2 font-medium"
+              className="text-blue-400 hover:text-blue-300 text-sm underline underline-offset-2 font-medium"
             >
               补充证据
             </button>
@@ -463,17 +463,17 @@ export default function ProjectInfoCard({
 
           <button
             onClick={handleUnlockReport}
-            className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white rounded-2xl text-sm font-semibold transition-all"
+            className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white rounded-2xl text-base font-semibold transition-all"
           >
             解锁全景风险报告
           </button>
-          <p className="text-zinc-500 text-xs leading-relaxed">
+          <p className="text-zinc-500 text-sm leading-relaxed">
             点击后需支付 2.99 USDT 解锁完整风险报告（含六维雷达图、全网舆情监测、AI专家深度解读、商业模式历史变更追踪等）。{"\n"}一次付费，永久查看。
           </p>
         </div>
 
         <div className="space-y-2">
-          <p className="text-zinc-500 text-xs text-center">数据基于公开信息，仅供参考</p>
+          <p className="text-zinc-500 text-sm text-center">数据基于公开信息，仅供参考</p>
           <div className="border-t border-[#343438] -mx-4"></div>
 
           <ShareProjectDrawer
@@ -485,20 +485,20 @@ export default function ProjectInfoCard({
             infoCompleteness={displayScore}
             completenessLevel={displayLabel}
             review={shortReview}
-            className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-xs font-medium py-2.5 rounded-full transition-colors"
+            className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-sm font-medium py-2.5 rounded-full transition-colors"
           />
           {/* 解锁支付确认弹窗 */}
           {isUnlockConfirmOpen && createPortal(
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]" onClick={() => setIsUnlockConfirmOpen(false)}>
               <div className="bg-zinc-900 rounded-lg p-4 w-80 mx-4 space-y-3 border border-[#343438]" onClick={(e) => e.stopPropagation()}>
-                <h3 className="text-white font-semibold text-sm text-center">解锁全景风险报告</h3>
-                <p className="text-zinc-300 text-xs leading-relaxed">将为您生成完整风险报告，需支付 2.99 USDT（当前仅支持BSC链（BEP20）支付）。是否继续？</p>
+                <h3 className="text-white font-semibold text-base text-center">解锁全景风险报告</h3>
+                <p className="text-zinc-300 text-sm leading-relaxed">将为您生成完整风险报告，需支付 2.99 USDT（当前仅支持BSC链（BEP20）支付）。是否继续？</p>
                 <div className="flex gap-3 pt-1">
-                  <button onClick={() => setIsUnlockConfirmOpen(false)} className="flex-1 py-1.5 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-xs">取消</button>
+                  <button onClick={() => setIsUnlockConfirmOpen(false)} className="flex-1 py-1.5 px-3 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors text-sm">取消</button>
                   <button onClick={() => {
                     setIsUnlockConfirmOpen(false)
                     if (onUnlock) onUnlock()
-                  }} className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-xs">确认支付</button>
+                  }} className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm">确认支付</button>
                 </div>
               </div>
             </div>,
@@ -508,7 +508,7 @@ export default function ProjectInfoCard({
           {onAnalyzeBusinessModel && (
             <button
               onClick={onAnalyzeBusinessModel}
-              className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-xs font-medium py-2.5 rounded-full transition-colors"
+              className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-sm font-medium py-2.5 rounded-full transition-colors"
             >
               分析该项目的商业模式
             </button>
@@ -521,15 +521,15 @@ export default function ProjectInfoCard({
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]" onClick={() => { setShowEvidenceModal(false); setEvidenceAlertMsg("") }}>
           <div className="bg-zinc-900 rounded-lg p-4 w-80 mx-4 space-y-3 border border-[#343438] max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="relative flex items-center justify-center">
-              <h3 className="text-white font-semibold text-sm">补充项目证据</h3>
+              <h3 className="text-white font-semibold text-base">补充项目证据</h3>
               <button
                 onClick={() => { setShowEvidenceModal(false); setEvidenceAlertMsg("") }}
-                className="absolute right-0 text-zinc-400 hover:text-white text-sm px-1"
+                className="absolute right-0 text-zinc-400 hover:text-white text-base px-1"
               >
                 ✕
               </button>
             </div>
-            <p className="text-zinc-300 text-xs leading-relaxed">
+            <p className="text-zinc-300 text-sm leading-relaxed">
               如果您掌握该项目相关的群聊截图、公告、提现记录或模式变更证据，请上传。这些信息将帮助生成更准确的风险报告。
             </p>
             <EvidenceUpload
@@ -557,10 +557,10 @@ export default function ProjectInfoCard({
             <div className="flex items-center justify-center text-green-400">
               <Check className="w-8 h-8" />
             </div>
-            <p className="text-zinc-200 text-xs text-left leading-relaxed">{submitResultMsg}</p>
+            <p className="text-zinc-200 text-sm text-left leading-relaxed">{submitResultMsg}</p>
             <button
               onClick={() => setShowSubmitResult(false)}
-              className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-xs font-medium"
+              className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
             >
               知道了
             </button>
