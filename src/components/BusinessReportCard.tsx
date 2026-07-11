@@ -97,12 +97,13 @@ interface BusinessReportCardProps {
 function buildTreeOption(treeData: TreeNode) {
   // 递归设置节点颜色
   function colorNodes(node: TreeNode) {
-    if (node.name.includes('共识') || node.name.startsWith('B')) {
+    const name = node?.name || ''
+    if (name.includes('共识') || name.startsWith('B')) {
       node.itemStyle = { color: '#22c55e' }
     } else {
       node.itemStyle = { color: '#6b7280' }
     }
-    if (node.name === '你' || node.name.startsWith('你')) {
+    if (name === '你' || name.startsWith('你')) {
       node.itemStyle = { color: '#3b82f6' }
     }
     node.children?.forEach(colorNodes)
