@@ -6550,6 +6550,7 @@ const routes = {
   '/api/projects/upsert':        handleProjectsUpsert,
   // 邀请返佣 + 代金券
   '/api/invite/generate':        handleInviteGenerate,
+  '/api/get-invite-code':        handleInviteGenerate,
   '/api/invite/accept':          handleInviteAccept,
   '/api/invite/stats':           handleInviteStats,
   '/api/invite/history':         handleInviteHistory,

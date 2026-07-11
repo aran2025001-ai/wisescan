@@ -109,7 +109,7 @@ export default function ShareButton({ inviteCode, label, className = '', trigger
   }, [toast])
 
   // 动态生成 baseUrl（开发环境 = localhost:5173，生产环境 = 实际域名）
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://wisescan.io'
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://wisescan.xyz'
   
   // 生成二维码
   useEffect(() => {
