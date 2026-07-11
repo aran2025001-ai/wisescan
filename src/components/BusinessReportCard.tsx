@@ -193,7 +193,9 @@ export function BusinessReportCard({
   const investment = Number(investmentStr) || 0
   const dailyRate = activeProduct?.daily_rate ?? sc?.daily_rate ?? null
   // ✅ 动态代币汇率：用户可手动输入当前价格（代币价格实时变动）
-  const hasTokenUnit = !!(activeProduct?.investment_token && activeProduct?.investment_token !== 'USDT')
+  // ✅ 只在有真实代币（不是 USDT 也不是 "U" 这种占位符）时显示汇率输入
+  const tokenSymbol = activeProduct?.investment_token || ''
+  const hasTokenUnit = !!(tokenSymbol && tokenSymbol !== 'USDT' && tokenSymbol !== 'U')
   const [tokenPriceStr, setTokenPriceStr] = useState('')
   const tokenPrice = Number(tokenPriceStr) || 0
   const minInvestTokenNum = Number(activeProduct?.min_invest_token?.replace(/[^0-9.]/g, '')) || 0
@@ -407,7 +409,7 @@ export function BusinessReportCard({
           {/* 动态汇率输入（仅代币计价项目显示） */}
           {hasTokenUnit && (
             <div className="space-y-1">
-              <label className="text-sm text-zinc-400">当前 1{activeProduct?.investment_token} = 多少 U</label>
+              <label className="text-sm text-zinc-400">当前 1{tokenSymbol} = 多少 U</label>
               <input
                 type="number"
                 value={tokenPriceStr}
@@ -693,7 +695,7 @@ export function BusinessReportCard({
             <div className="text-sm text-zinc-50 leading-relaxed whitespace-pre-wrap">
               {renderEvidenceTaggedText(reportData.strategy_suggestion, "text-sm text-zinc-50 leading-relaxed whitespace-pre-wrap")}
             </div>
-            {reportData.visualization_tree ? (
+            {reportData.visualization_tree && Array.isArray(reportData.visualization_tree) && reportData.visualization_tree.length > 0 ? (
               <div className="bg-zinc-800/60 rounded-lg p-3 border border-zinc-700/50 mt-2">
                 <div className="flex items-center gap-1.5 mb-2">
                   <Users className="w-3.5 h-3.5 text-blue-400" />
