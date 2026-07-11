@@ -5150,16 +5150,30 @@ async function handleChat(req, res) {
     // ── 1.5 付费状态判断（前端为主，数据库为辅）──────
     let isPaid = !!is_paid;  // 前端 localStorage 权威值（用户已付费解锁）
     let paidSource = isPaid ? '前端localStorage' : '未知';
-    if (!isPaid && contract_address && user_address) {
+    if (!isPaid && (contract_address || project_name) && user_address) {
       // 前端未确认付费 → 查数据库兜底（多设备/新浏览器场景）
       try {
         const supabasePaid = await getSupabase();
-        const { data: report } = await supabasePaid
-          .from('business_reports')
-          .select('id')
-          .eq('contract_address', contract_address.toLowerCase())
-          .ilike('user_address', user_address.toLowerCase())
-          .maybeSingle();
+        let report = null
+        if (contract_address) {
+          const r = await supabasePaid
+            .from('business_reports')
+            .select('id')
+            .eq('contract_address', contract_address.toLowerCase())
+            .ilike('user_address', user_address.toLowerCase())
+            .maybeSingle();
+          report = r.data
+        }
+        // 🆕 没合约地址时按项目名 + 用户查
+        if (!report && project_name) {
+          const r2 = await supabasePaid
+            .from('business_reports')
+            .select('id')
+            .ilike('project_name', project_name)
+            .ilike('user_address', user_address.toLowerCase())
+            .maybeSingle();
+          report = r2.data
+        }
         if (report) { isPaid = true; paidSource = '数据库'; }
         console.log(`[对话] DB付费状态: ${isPaid ? '已付费' : '免费'} | project=${project_name || contract_address}`);
       } catch (payErr) {
