@@ -2,6 +2,10 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/**/*.mjs": { "runtime": "vercel@disabled" },
+    "api/**/*.ts": { "runtime": "vercel@disabled" }
+  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "https://api.wisescan.xyz/api/$1" },
     { "source": "/s/(.*)", "destination": "https://api.wisescan.xyz/api/s/$1" },
