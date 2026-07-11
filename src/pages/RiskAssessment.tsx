@@ -1584,13 +1584,13 @@ export default function RiskAssessment() {
       console.log('[WiseScan] 无地址模式，跳过合约验证')
       verifyPassed = true
     } else {
-      const verifyBody = {
-        project_name: projectName,
-        contract_address: scanAddr || undefined,
-        quick_verify: true,
-        user_address: address || 'anonymous',
-        frontend_verified: true,
-      }
+  const verifyBody = {
+    project_name: projectName || scanAddr?.slice(2, 10) || 'unknown',
+    contract_address: scanAddr || undefined,
+    quick_verify: true,
+    user_address: address || 'anonymous',
+    frontend_verified: true,
+  }
       console.log('[WiseScan] 开始快速验证', verifyBody)
 
       try {
