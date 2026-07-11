@@ -82,7 +82,9 @@ export default function InvitationRebate() {
 
   const handleCopyLink = () => {
     if (!address) { setToastMessage('请先连接钱包'); return }
+    if (!inviteUrl) { setToastMessage('邀请链接未就绪，请稍后重试'); return }
     const code = inviteUrl.split('code=')[1] || ''
+    if (!code) { setToastMessage('邀请码异常，请重新连接钱包后重试'); return }
     const linkToCopy = `明鉴WiseScan — 守护你的每一次投资决策\n项目风险评估、商业模式拆解，让你和专家一对一详聊项目细节。\n用Web3浏览器打开链接（如TP钱包等）：\n${window.location.origin}/invite?code=${code}`
     // 兼容不支持 Clipboard API 的 WebView（如 TP 钱包）
     try {

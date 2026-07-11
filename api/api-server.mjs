@@ -5638,7 +5638,7 @@ async function handleInviteGenerate(req, res) {
 
     const { data: existing } = await supabase.from('invitations').select('invite_code').eq('inviter', addr).maybeSingle();
     if (existing) {
-      return jsonRes(res, 200, { invite_code: existing.invite_code, invite_url: `https://wisescan.io/invite?code=${existing.invite_code}` });
+      return jsonRes(res, 200, { invite_code: existing.invite_code, invite_url: `https://wisescan.xyz/invite?code=${existing.invite_code}` });
     }
 
     const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -5646,7 +5646,7 @@ async function handleInviteGenerate(req, res) {
     const { error: insErr } = await supabase.from('invitations').insert({ inviter: addr, invitee: '', invite_code });
     if (insErr) throw insErr;
 
-    return jsonRes(res, 200, { invite_code, invite_url: `https://wisescan.io/invite?code=${invite_code}` });
+    return jsonRes(res, 200, { invite_code, invite_url: `https://wisescan.xyz/invite?code=${invite_code}` });
   } catch (err) {
     return jsonRes(res, 500, { error: err.message });
   }
