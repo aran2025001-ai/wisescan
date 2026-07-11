@@ -1667,7 +1667,7 @@ export default function RiskAssessment() {
     try {
       // 🔧 handleFreeScan 内部 buildRequestBody（不能引用 handleReportUnlock 内部的版本）
       const freeBody = {
-        project_name: projectName,
+        project_name: projectName || scanAddr?.slice(2, 10) || 'unknown',
         contract_address: scanAddr || undefined,
         user_notes: formData.remarks?.trim() || undefined,
         user_address: address || 'anonymous',
