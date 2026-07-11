@@ -421,8 +421,8 @@ export default function ProjectDetail() {
                 onClick={(e) => {
                   e.stopPropagation()
                   setPaymentPrice(2.99)
+                  setShowPaymentModal(true)
                   setIsUnlockModalOpen(false)
-                  setTimeout(() => setShowPaymentModal(true), 0)
                 }}
                 className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-xs"
               >
