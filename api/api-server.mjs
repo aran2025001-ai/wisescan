@@ -2043,7 +2043,12 @@ async function handleGenerateReport(req, res) {
   const body = await readBody(req);
   const { project_name, contract_address, project_id, user_notes, user_notes_images, quick_verify, user_address, frontend_verified } = body;
 
-  if (!project_name || !project_name.trim()) {
+  console.log(`🔍 [DEBUG generate-report] body keys: ${Object.keys(body).join(',')}`);
+  console.log(`🔍 [DEBUG generate-report] project_name: ${JSON.stringify(project_name)}, quick_verify: ${JSON.stringify(quick_verify)}, typeof quick_verify: ${typeof quick_verify}`);
+  console.log(`🔍 [DEBUG generate-report] condition !quick_verify: ${!quick_verify}, !project_name: ${!project_name}, project_name.trim: ${project_name && project_name.trim}`);
+
+  // ⚠️ quick_verify 模式不强制 project_name（用户可能只填合约地址）
+  if (!quick_verify && (!project_name || !project_name.trim())) {
     return jsonRes(res, 400, { error: 'project_name is required' });
   }
 
