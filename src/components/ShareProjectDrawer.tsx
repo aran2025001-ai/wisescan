@@ -160,7 +160,7 @@ export default function ShareProjectDrawer({
     comp: String(infoCompleteness),
     clevel: completenessLevel,
     review: review,
-    qr: `${baseUrl}/library?address=${contractAddress}`,
+    qr: inviteCode ? `${baseUrl}/library?address=${contractAddress}&code=${inviteCode}` : `${baseUrl}/library?address=${contractAddress}`,
   })
   const longUrl = `${baseUrl}/share/poster?${posterParams.toString()}`
   const shareUrl = shortCode ? `${baseUrl}/s/${shortCode}` : longUrl
@@ -184,7 +184,7 @@ export default function ShareProjectDrawer({
         comp: String(infoCompleteness),
         clevel: completenessLevel,
         review: review,
-        qr: `${baseUrl}/library?address=${contractAddress}`,
+        qr: inviteCode ? `${baseUrl}/library?address=${contractAddress}&code=${inviteCode}` : `${baseUrl}/library?address=${contractAddress}`,
       },
     }
 
