@@ -281,7 +281,7 @@ export default function BusinessShareDrawer({
     setShowSheet(false);
   };
 
-  /** 保存海报图片（直接下载，不经过预览兜圈） */
+  /** 保存海报图片（直接下载，不跳浏览器） */
   const handleSaveImage = useCallback(() => {
     const src = posterImageUrl || '';
     if (!src) { setToast('图片尚未生成，请稍候'); return }
@@ -290,8 +290,9 @@ export default function BusinessShareDrawer({
       a.href = src;
       a.download = `明鉴-${projectName || '项目'}-拆解卡片.png`;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    } catch {}
-    window.open(src, '_blank');
+    } catch (e) {
+      setToast('保存失败，请截图保存');
+    }
   }, [posterImageUrl, projectName]);
 
   const handleClick = () => {

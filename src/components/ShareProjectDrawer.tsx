@@ -326,7 +326,7 @@ export default function ShareProjectDrawer({
     setShowSheet(false)
   }
 
-  /** 保存海报图片（直接下载，不经过预览兜圈） */
+  /** 保存海报图片（直接下载，不跳浏览器） */
   const handleSaveImage = useCallback(() => {
     const src = posterImageUrl || ''
     if (!src) { setToast('图片尚未生成，请稍候'); return }
@@ -335,8 +335,9 @@ export default function ShareProjectDrawer({
       a.href = src
       a.download = `明鉴-${projectName || '项目'}-情报卡片.png`
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
-    } catch {}
-    window.open(src, '_blank')
+    } catch (e) {
+      setToast('保存失败，请截图保存')
+    }
   }, [posterImageUrl, projectName])
 
   // ── 触发按钮点击 ──

@@ -238,7 +238,7 @@ export default function ShareButton({ inviteCode, label, className = '', trigger
     }
   }, [shareText, doCopy, doShare])
 
-  /** 保存图片到设备（直接下载，不经过预览兜圈） */
+  /** 保存图片到设备（直接下载，不跳浏览器） */
   const handleSaveImage = useCallback(() => {
     const src = thumbnailSrc || '/share-poster.png'
     try {
@@ -246,9 +246,10 @@ export default function ShareButton({ inviteCode, label, className = '', trigger
       a.href = src
       a.download = `明鉴-邀请卡片-${inviteCode || 'share'}.png`
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
-    } catch {}
-    // 降级：新窗口打开（用户可长按保存）
-    window.open(src, '_blank')
+      setToast('✅ 图片已保存')
+    } catch (e) {
+      setToast('保存失败，请截图保存')
+    }
   }, [thumbnailSrc, inviteCode])
 
   /** 确认弹窗「确定」：关闭弹窗 + 打开对应 APP */
