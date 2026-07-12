@@ -31,12 +31,16 @@ export default function InvitationRebate() {
     } catch {}
   }
 
-  const fetchInviteLink = async () => {
+  const fetchInviteLink = async (): Promise<string | null> => {
     try {
       const r = await fetch(`/api/invite/generate?user_address=${address}`)
       const j = await r.json()
-      if (j.invite_url) setInviteUrl(j.invite_url)
+      if (j.invite_url) {
+        setInviteUrl(j.invite_url)
+        return j.invite_url
+      }
     } catch {}
+    return null
   }
 
   const fetchHistory = async () => {
@@ -80,11 +84,20 @@ export default function InvitationRebate() {
     }
   }
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     if (!address) { setToastMessage('请先连接钱包'); return }
-    if (!inviteUrl) { setToastMessage('邀请链接未就绪，请稍后重试'); return }
-    const code = inviteUrl.split('code=')[1] || ''
-    if (!code) { setToastMessage('邀请码异常，请重新连接钱包后重试'); return }
+
+    // 如果邀请链接还没加载好，主动调 API 获取
+    let url = inviteUrl
+    if (!url) {
+      setToastMessage('正在获取邀请链接...')
+      const result = await fetchInviteLink()
+      if (!result) { setToastMessage('获取邀请链接失败，请重试'); return }
+      url = result
+    }
+
+    const code = url.split('code=')[1] || ''
+    if (!code) { setToastMessage('邀请码异常，请重试'); return }
     const linkToCopy = `明鉴WiseScan — 守护你的每一次投资决策\n项目风险评估、商业模式拆解，让你和专家一对一详聊项目细节。\n用Web3浏览器打开链接（如TP钱包等）：\n${window.location.origin}/invite?code=${code}`
     // 兼容不支持 Clipboard API 的 WebView（如 TP 钱包）
     try {
