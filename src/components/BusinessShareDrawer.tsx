@@ -82,7 +82,6 @@ export default function BusinessShareDrawer({
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; channel: string }>({ open: false, channel: '' });
   const [shortCode, setShortCode] = useState<string>('');
   const [posterImageUrl, setPosterImageUrl] = useState<string>('');
-  const [savePreviewSrc, setSavePreviewSrc] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const scaleContainerRef = useRef<HTMLDivElement>(null);
@@ -282,12 +281,18 @@ export default function BusinessShareDrawer({
     setShowSheet(false);
   };
 
-  /** 保存海报图片（弹大图让用户长按保存——兼容所有 WebView） */
+  /** 保存海报图片（直接下载，不经过预览兜圈） */
   const handleSaveImage = useCallback(() => {
     const src = posterImageUrl || '';
     if (!src) { setToast('图片尚未生成，请稍候'); return }
-    setSavePreviewSrc(src);
-  }, [posterImageUrl]);
+    try {
+      const a = document.createElement('a');
+      a.href = src;
+      a.download = `明鉴-${projectName || '项目'}-拆解卡片.png`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    } catch {}
+    window.open(src, '_blank');
+  }, [posterImageUrl, projectName]);
 
   const handleClick = () => {
     hasGeneratedRef.current = false;
@@ -463,33 +468,6 @@ export default function BusinessShareDrawer({
                 确定
               </button>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* 保存图片预览：下载按钮 + 长按保存提示 */}
-      {savePreviewSrc && createPortal(
-        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/90" onClick={() => setSavePreviewSrc('')}>
-          <div className="relative max-w-[80vw] max-h-[85vh] flex flex-col items-center gap-4" onClick={e => e.stopPropagation()}>
-            <img src={savePreviewSrc} alt="海报" className="max-w-full max-h-[65vh] rounded-2xl shadow-2xl" />
-            <div className="flex gap-3 w-full justify-center">
-              <a href={savePreviewSrc} download={`明鉴-${projectName || '项目'}-拆解卡片.png`}
-                className="flex-1 max-w-[160px] h-11 rounded-xl bg-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.97] transition-transform">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                保存图片
-              </a>
-              <button onClick={() => setSavePreviewSrc('')}
-                className="flex-1 max-w-[120px] h-11 rounded-xl border border-white/20 text-white/80 text-sm font-medium flex items-center justify-center gap-2 active:scale-[0.97] transition-transform">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-                关闭
-              </button>
-            </div>
-            <div className="text-white/50 text-xs text-center -mt-2">或长按图片保存到相册</div>
           </div>
         </div>,
         document.body
