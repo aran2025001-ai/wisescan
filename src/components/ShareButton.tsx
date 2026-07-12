@@ -96,6 +96,7 @@ export default function ShareButton({ inviteCode, label, className = '', trigger
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [toast, setToast] = useState('')
   const [thumbnailSrc, setThumbnailSrc] = useState<string>('')
+  const [savePreviewSrc, setSavePreviewSrc] = useState('')  // 长按保存预览
   // 确认弹窗状态：{ open: 是否显示, channel: 当前渠道 }
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; channel: string }>({ open: false, channel: '' })
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
@@ -238,23 +239,11 @@ export default function ShareButton({ inviteCode, label, className = '', trigger
     }
   }, [shareText, doCopy, doShare])
 
-  /** 保存图片到设备 */
-  const handleSaveImage = useCallback(async () => {
+  /** 保存图片到设备（弹大图让用户长按保存——兼容所有 WebView） */
+  const handleSaveImage = useCallback(() => {
     const src = thumbnailSrc || '/share-poster.png'
-    try {
-      const bgResp = await fetch(src)
-      const bgBlob = await bgResp.blob()
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(bgBlob)
-      a.download = `明鉴-邀请卡片-${inviteCode || 'share'}.png`
-      document.body.appendChild(a); a.click(); document.body.removeChild(a)
-      setToast('✅ 图片已保存')
-    } catch {
-      // 降级：新窗口打开，用户长按保存
-      window.open(src, '_blank')
-      setToast('如未自动下载，请长按图片保存')
-    }
-  }, [thumbnailSrc, inviteCode])
+    setSavePreviewSrc(src)
+  }, [thumbnailSrc])
 
   /** 确认弹窗「确定」：关闭弹窗 + 打开对应 APP */
   const handleConfirmOk = useCallback(() => {
@@ -443,6 +432,23 @@ export default function ShareButton({ inviteCode, label, className = '', trigger
                 确定
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 长按保存预览 */}
+      {savePreviewSrc && createPortal(
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/90" onClick={() => setSavePreviewSrc('')}>
+          <div className="relative max-w-[80vw] max-h-[85vh] flex flex-col items-center gap-3" onClick={e => e.stopPropagation()}>
+            <img src={savePreviewSrc} alt="海报" className="max-w-full max-h-[75vh] rounded-2xl shadow-2xl" />
+            <div className="text-white/70 text-sm text-center">
+              👆 长按图片，选择「保存到相册」
+            </div>
+            <button onClick={() => setSavePreviewSrc('')}
+              className="mt-1 px-6 py-2 rounded-full bg-white/10 text-white text-sm active:bg-white/20 transition-colors">
+              关闭
+            </button>
           </div>
         </div>,
         document.body

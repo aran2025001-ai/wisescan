@@ -82,6 +82,7 @@ export default function BusinessShareDrawer({
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; channel: string }>({ open: false, channel: '' });
   const [shortCode, setShortCode] = useState<string>('');
   const [posterImageUrl, setPosterImageUrl] = useState<string>('');
+  const [savePreviewSrc, setSavePreviewSrc] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const scaleContainerRef = useRef<HTMLDivElement>(null);
@@ -281,23 +282,12 @@ export default function BusinessShareDrawer({
     setShowSheet(false);
   };
 
-  /** 保存海报图片到设备 */
-  const handleSaveImage = useCallback(async () => {
+  /** 保存海报图片（弹大图让用户长按保存——兼容所有 WebView） */
+  const handleSaveImage = useCallback(() => {
     const src = posterImageUrl || '';
     if (!src) { setToast('图片尚未生成，请稍候'); return }
-    try {
-      const resp = await fetch(src);
-      const blob = await resp.blob();
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `明鉴-${projectName || '项目'}-拆解卡片.png`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setToast('✅ 图片已保存');
-    } catch {
-      window.open(src, '_blank');
-      setToast('如未自动下载，请长按图片保存');
-    }
-  }, [posterImageUrl, projectName]);
+    setSavePreviewSrc(src);
+  }, [posterImageUrl]);
 
   const handleClick = () => {
     hasGeneratedRef.current = false;
@@ -473,6 +463,23 @@ export default function BusinessShareDrawer({
                 确定
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 长按保存预览 */}
+      {savePreviewSrc && createPortal(
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/90" onClick={() => setSavePreviewSrc('')}>
+          <div className="relative max-w-[80vw] max-h-[85vh] flex flex-col items-center gap-3" onClick={e => e.stopPropagation()}>
+            <img src={savePreviewSrc} alt="海报" className="max-w-full max-h-[75vh] rounded-2xl shadow-2xl" />
+            <div className="text-white/70 text-sm text-center">
+              👆 长按图片，选择「保存到相册」
+            </div>
+            <button onClick={() => setSavePreviewSrc('')}
+              className="mt-1 px-6 py-2 rounded-full bg-white/10 text-white text-sm active:bg-white/20 transition-colors">
+              关闭
+            </button>
           </div>
         </div>,
         document.body
