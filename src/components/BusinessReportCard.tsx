@@ -193,9 +193,10 @@ export function BusinessReportCard({
   const investment = Number(investmentStr) || 0
   const dailyRate = activeProduct?.daily_rate ?? sc?.daily_rate ?? null
   // ✅ 动态代币汇率：用户可手动输入当前价格（代币价格实时变动）
-  // ✅ 只在有真实代币（不是 USDT 也不是 "U" 这种占位符）时显示汇率输入
+  // ✅ 显示汇率输入的条件：代币名是真实代币（非空、不是 USDT/USTC/U 这种占位符）
   const tokenSymbol = activeProduct?.investment_token || ''
-  const hasTokenUnit = !!(tokenSymbol && tokenSymbol !== 'USDT' && tokenSymbol !== 'U')
+  // 是否按代币计算：必须是非 USDT 类代币（USDT/U 视为 USDT 计价）
+  const hasTokenUnit = !!(tokenSymbol && tokenSymbol !== 'USDT' && tokenSymbol !== 'U' && tokenSymbol !== 'USTC')
   const [tokenPriceStr, setTokenPriceStr] = useState('')
   const tokenPrice = Number(tokenPriceStr) || 0
   const minInvestTokenNum = Number(activeProduct?.min_invest_token?.replace(/[^0-9.]/g, '')) || 0
@@ -695,18 +696,35 @@ export function BusinessReportCard({
             <div className="text-sm text-zinc-50 leading-relaxed whitespace-pre-wrap">
               {renderEvidenceTaggedText(reportData.strategy_suggestion, "text-sm text-zinc-50 leading-relaxed whitespace-pre-wrap")}
             </div>
-            {reportData.visualization_tree && Array.isArray(reportData.visualization_tree) && reportData.visualization_tree.length > 0 ? (
+            {(() => {
+              // 判断点位图是否值得显示：节点总数 >= 3 且至少有 1 层 children
+              const tree = reportData.visualization_tree
+              const isUsable = Array.isArray(tree) && tree.length > 0
+              const countNodes = (nodes: any[]): number => {
+                let count = 0
+                for (const n of nodes) {
+                  count += 1
+                  if (Array.isArray(n?.children)) count += countNodes(n.children)
+                }
+                return count
+              }
+              const totalNodes = isUsable ? countNodes(tree) : 0
+              const showTree = isUsable && totalNodes >= 3
+              if (!showTree) return null
+              return (
               <div className="bg-zinc-800/60 rounded-lg p-3 border border-zinc-700/50 mt-2">
                 <div className="flex items-center gap-1.5 mb-2">
                   <Users className="w-3.5 h-3.5 text-blue-400" />
                   <span className="text-sm text-zinc-400">点位布局图</span>
                 </div>
                 <ReactECharts
-                  option={buildTreeOption(reportData.visualization_tree)}
+                  option={buildTreeOption(tree)}
                   style={{ height: 360, width: '100%' }}
                   showLoading={false}
                 />
               </div>
+              )
+            })()}
             ) : reportData.visualization_hint ? (
               <div className="bg-zinc-800 rounded p-2.5 text-sm text-zinc-50 font-mono space-y-1 whitespace-pre-wrap">
                 {renderEvidenceTaggedText(reportData.visualization_hint, "text-sm text-zinc-50 font-mono whitespace-pre-wrap")}

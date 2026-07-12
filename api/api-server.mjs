@@ -5160,11 +5160,12 @@ async function handleChat(req, res) {
     let isPaid = !!is_paid;  // 前端 localStorage 权威值（用户已付费解锁）
     let paidSource = isPaid ? '前端localStorage' : '未知';
     if (!isPaid && (contract_address || project_name) && user_address) {
-      // 前端未确认付费 → 查数据库兜底（多设备/新浏览器场景）
+      // 前端未确认付费 → 查数据库兜底（多设备/新浏览器/新钱包场景）
       try {
         const supabasePaid = await getSupabase();
         let report = null
         if (contract_address) {
+          // 严格匹配：合约 + 用户
           const r = await supabasePaid
             .from('business_reports')
             .select('id')
@@ -5172,16 +5173,34 @@ async function handleChat(req, res) {
             .ilike('user_address', user_address.toLowerCase())
             .maybeSingle();
           report = r.data
+          // 宽松匹配：只按合约（任何用户都算付费过这个项目）
+          if (!report) {
+            const r2 = await supabasePaid
+              .from('business_reports')
+              .select('id')
+              .eq('contract_address', contract_address.toLowerCase())
+              .maybeSingle();
+            report = r2.data
+          }
         }
         // 🆕 没合约地址时按项目名 + 用户查
         if (!report && project_name) {
-          const r2 = await supabasePaid
+          const r3 = await supabasePaid
             .from('business_reports')
             .select('id')
             .ilike('project_name', project_name)
             .ilike('user_address', user_address.toLowerCase())
             .maybeSingle();
-          report = r2.data
+          report = r3.data
+          // 🆕 再宽松：只按项目名（任何用户都算付费过这个项目）
+          if (!report) {
+            const r4 = await supabasePaid
+              .from('business_reports')
+              .select('id')
+              .ilike('project_name', project_name)
+              .maybeSingle();
+            report = r4.data
+          }
         }
         if (report) { isPaid = true; paidSource = '数据库'; }
         console.log(`[对话] DB付费状态: ${isPaid ? '已付费' : '免费'} | project=${project_name || contract_address}`);
