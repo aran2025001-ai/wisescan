@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from "react"
+﻿import { useState, useRef, useEffect, useCallback } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { useAccount } from "wagmi"
 import { ChevronLeft, MessageCirclePlus, Mic, Keyboard, Send, AlertCircle, Gift, ChevronRight, Loader2 } from "lucide-react"
