@@ -5653,7 +5653,18 @@ async function handleInviteGenerate(req, res) {
 
     const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
     const invite_code = addr.slice(2, 6).toUpperCase() + suffix;
-    const { error: insErr } = await supabase.from('invitations').insert({ inviter: addr, invite_code });
+    // ⚠️ 数据库 invitee 字段 NOT NULL + UNIQUE 约束
+    //  写时用 `invitee = inviter + '_' + nanoid` 作为 placeholder（确保 UNIQUE 不冲突）
+    //  接受邀请时再 UPDATE 为真实地址
+    const placeholder_invitee = `pending_${addr.slice(2, 8)}_${Date.now().toString(36)}`
+    const { error: insErr } = await supabase.from('invitations').insert({ inviter: addr, invite_code, invitee: placeholder_invitee });
+    if (insErr) {
+      const { data: retry } = await supabase.from('invitations').select('invite_code').eq('inviter', addr).maybeSingle();
+      if (retry) {
+        return jsonRes(res, 200, { invite_code: retry.invite_code, invite_url: `https://wisescan.xyz/invite?code=${retry.invite_code}` });
+      }
+      throw insErr;
+    }
     if (insErr) {
       // ⚠️ 唯一约束冲突（invitee 字段有 UNIQUE 时 '' 会重复）
       //    降级：再查一次是否已有邀请码
@@ -5683,7 +5694,7 @@ async function handleInviteAccept(req, res) {
     // 查邀请码（含 status 和 invitee 用于防重检查）
     const { data: inv } = await supabase.from('invitations').select('id, inviter, invitee, status').eq('invite_code', invite_code).maybeSingle();
     if (!inv) return jsonRes(res, 404, { error: '邀请码无效' });
-    if (inv.invitee) return jsonRes(res, 400, { error: '该邀请码已被使用' });
+    if (inv.invitee && !inv.invitee.startsWith('pending_')) return jsonRes(res, 400, { error: '该邀请码已被使用' });
     if (inv.status !== 'pending') return jsonRes(res, 400, { error: '该邀请码状态异常' });
 
     // 更新邀请状态为 connected
