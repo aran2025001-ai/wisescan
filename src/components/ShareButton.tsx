@@ -246,7 +246,7 @@ export default function ShareButton({ inviteCode, label, className = '', trigger
       a.href = src
       a.download = `明鉴-邀请卡片-${inviteCode || 'share'}.png`
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
-      setToast('✅ 图片已保存')
+      setToast('请截图保存此图片')
     } catch (e) {
       setToast('保存失败，请截图保存')
     }

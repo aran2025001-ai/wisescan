@@ -290,6 +290,7 @@ export default function BusinessShareDrawer({
       a.href = src;
       a.download = `明鉴-${projectName || '项目'}-拆解卡片.png`;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setToast('请截图保存此图片');
     } catch (e) {
       setToast('保存失败，请截图保存');
     }
