@@ -91,6 +91,8 @@ interface BusinessReportCardProps {
   onShare?: () => void
   onAssessRisk?: () => void
   hideAssessRisk?: boolean
+  /** 用户手动填入代币汇率时通知父组件（用于 AI 聊天感知汇率） */
+  onTokenPriceChange?: (price: number, symbol: string) => void
 }
 
 /** ECharts Tree 选项构建 */
@@ -171,6 +173,7 @@ export function BusinessReportCard({
   onShare,
   onAssessRisk,
   hideAssessRisk = false,
+  onTokenPriceChange,
 }: BusinessReportCardProps) {
   // ---- 参数化引擎状态 ----
   const se = reportData?.static_engine
@@ -205,6 +208,13 @@ export function BusinessReportCard({
   const effectiveMinTokenDisplay = effectiveMinTokenText || null
   // ✅ U 估算必须基于"实际自掏腰包"的代币数量，不是名义门槛
   const minInvestUsdDisplay = tokenPrice > 0 && effectiveMinTokenNum > 0 ? Math.round(effectiveMinTokenNum * tokenPrice).toString() : null
+
+  // ✅ 用户输入汇率时通知父组件（让 AI 聊天能感知当前价格）
+  useEffect(() => {
+    if (onTokenPriceChange && tokenSymbol) {
+      onTokenPriceChange(tokenPrice, tokenSymbol)
+    }
+  }, [tokenPrice, tokenSymbol, onTokenPriceChange])
 
   // 静态：特殊开关
   const specialSwitches = se?.special_switches || []

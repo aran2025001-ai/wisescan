@@ -4883,7 +4883,7 @@ async function handleChat(req, res) {
   if (req.method !== 'POST') return jsonRes(res, 405, { error: 'Method not allowed' });
   try {
     const body = await readBody(req);
-    const { project_name, contract_address, message, chat_history, user_address, conversation_count, is_paid, page, report_data: inlineReportData } = body;
+    const { project_name, contract_address, message, chat_history, user_address, conversation_count, is_paid, page, report_data: inlineReportData, token_price, token_symbol } = body;
 
     if (!message || !message.trim()) {
       return jsonRes(res, 400, { error: 'message is required' });
@@ -5251,6 +5251,7 @@ ${reportFields}
 
 【当前项目/规则】${project_name || '用户提交的商业模式'}
 【证据】${evidenceContext}
+${token_price > 0 && token_symbol ? `【当前汇率】用户设置 1${token_symbol} = ${token_price}U（用户在界面上手动填入的当前市场价格）` : ''}
 
 用户已付费解锁拆解报告，默认用户已知晓报告中的基本规则。回答时遵循以下规则：
 
@@ -5268,7 +5269,7 @@ ${reportFields}
 
 4. **不准编造数字**：如果用户没给具体数字，不要自己编"假设日息0.5%""假设直推奖10%"。要么从报告里找精确数字，要么直接说"这个数需要确认"。
 
-5. **计算能力**：用户问具体数字时，当场算清楚。涉及代币单位转换时，先问"当前1个代币等于多少U"，拿到汇率再算。不要假设。
+5. **计算能力**：用户问具体数字时，当场算清楚。涉及代币单位转换时，如果【当前汇率】已提供则直接用该汇率计算，否则先问"当前1个代币等于多少U"，拿到汇率再算。不要假设。
 
 6. **完整布局**：如果项目需要多层网络（主账户→共识账户→体验账户），必须把全部层级都算进总投入。不能只算主账户，漏掉下面的共识账户或体验账户。
 

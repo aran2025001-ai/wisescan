@@ -120,6 +120,13 @@ export default function BusinessBreakdown() {
   const [chatIsPaid, setChatIsPaid] = useState(isBreakdownPaid)
   const [conversationCount, setConversationCount] = useState(0)
   const [, setRemainingCount] = useState(5)
+  // 用户手动填入的代币汇率（用于 AI 聊天时精准换算）
+  const [tokenPrice, setTokenPrice] = useState(0)
+  const [tokenSymbol, setTokenSymbol] = useState('')
+  const onTokenPriceChange = useCallback((price: number, symbol: string) => {
+    setTokenPrice(price)
+    setTokenSymbol(symbol)
+  }, [])
   const [reportData, setReportData] = useState<any>(() => {
     try {
       const saved = sessionStorage.getItem('wisescan_biz_report')
@@ -386,6 +393,9 @@ export default function BusinessBreakdown() {
           page: 'business',
           // 直接传递报告数据，确保即使 DB 保存失败 AI 也有数据可用
           report_data: reportData || undefined,
+          // 用户手动填入的代币汇率（让 AI 聊天能感知价格进行换算）
+          token_price: tokenPrice > 0 ? tokenPrice : undefined,
+          token_symbol: tokenSymbol || undefined,
         }),
       });
 
@@ -956,7 +966,7 @@ export default function BusinessBreakdown() {
                 </div>
               ) : message.isResults || message.content === "business-report" ? (
                 /* Business Report Card */
-                <BusinessReportCard reportData={reportData} onAssessRisk={() => navigate("/assess")} />
+                <BusinessReportCard reportData={reportData} onAssessRisk={() => navigate("/assess")} onTokenPriceChange={onTokenPriceChange} />
               ) : (
                 /* Text Message */
                 <div className={message.id === "5" ? "" : "flex flex-col gap-1"}>
