@@ -193,10 +193,9 @@ export function BusinessReportCard({
   const investment = Number(investmentStr) || 0
   const dailyRate = activeProduct?.daily_rate ?? sc?.daily_rate ?? null
   // ✅ 动态代币汇率：用户可手动输入当前价格（代币价格实时变动）
-  // ✅ 显示汇率输入的条件：代币名是真实代币（非空、不是 USDT/USTC/U 这种占位符）
+  // ✅ 显示汇率输入的条件：有真实代币名且不是 USDT/USTC
   const tokenSymbol = activeProduct?.investment_token || ''
-  // 是否按代币计算：必须是非 USDT 类代币（USDT/U 视为 USDT 计价）
-  const hasTokenUnit = !!(tokenSymbol && tokenSymbol !== 'USDT' && tokenSymbol !== 'U' && tokenSymbol !== 'USTC')
+  const hasTokenUnit = !!(tokenSymbol && tokenSymbol !== 'USDT' && tokenSymbol !== 'USTC')
   const [tokenPriceStr, setTokenPriceStr] = useState('')
   const tokenPrice = Number(tokenPriceStr) || 0
   const minInvestTokenNum = Number(activeProduct?.min_invest_token?.replace(/[^0-9.]/g, '')) || 0
@@ -410,7 +409,8 @@ export function BusinessReportCard({
           {/* 动态汇率输入（仅代币计价项目显示） */}
           {hasTokenUnit && (
             <div className="space-y-1">
-              <label className="text-sm text-zinc-400">当前 1{tokenSymbol} = 多少 U</label>
+              {/* 如果代币名为 'U' 这种占位符，显示"当前代币"避免 U=U */}
+              <label className="text-sm text-zinc-400">当前 1{tokenSymbol && tokenSymbol !== 'U' ? tokenSymbol : '代币'} = 多少 U</label>
               <input
                 type="number"
                 value={tokenPriceStr}

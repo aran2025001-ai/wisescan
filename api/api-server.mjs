@@ -5160,12 +5160,11 @@ async function handleChat(req, res) {
     let isPaid = !!is_paid;  // 前端 localStorage 权威值（用户已付费解锁）
     let paidSource = isPaid ? '前端localStorage' : '未知';
     if (!isPaid && (contract_address || project_name) && user_address) {
-      // 前端未确认付费 → 查数据库兜底（多设备/新浏览器/新钱包场景）
+      // 前端未确认付费 → 查数据库兜底（多设备/新浏览器场景）
       try {
         const supabasePaid = await getSupabase();
         let report = null
         if (contract_address) {
-          // 严格匹配：合约 + 用户
           const r = await supabasePaid
             .from('business_reports')
             .select('id')
@@ -5173,39 +5172,30 @@ async function handleChat(req, res) {
             .ilike('user_address', user_address.toLowerCase())
             .maybeSingle();
           report = r.data
-          // 宽松匹配：只按合约（任何用户都算付费过这个项目）
-          if (!report) {
-            const r2 = await supabasePaid
-              .from('business_reports')
-              .select('id')
-              .eq('contract_address', contract_address.toLowerCase())
-              .maybeSingle();
-            report = r2.data
-          }
         }
-        // 🆕 没合约地址时按项目名 + 用户查
+        // 🆕 没合约地址时按项目名 + 用户地址查（商业模式拆解场景）
         if (!report && project_name) {
-          const r3 = await supabasePaid
+          const r2 = await supabasePaid
             .from('business_reports')
             .select('id')
             .ilike('project_name', project_name)
             .ilike('user_address', user_address.toLowerCase())
             .maybeSingle();
-          report = r3.data
-          // 🆕 再宽松：只按项目名（任何用户都算付费过这个项目）
-          if (!report) {
-            const r4 = await supabasePaid
-              .from('business_reports')
-              .select('id')
-              .ilike('project_name', project_name)
-              .maybeSingle();
-            report = r4.data
-          }
+          report = r2.data
         }
         if (report) { isPaid = true; paidSource = '数据库'; }
         console.log(`[对话] DB付费状态: ${isPaid ? '已付费' : '免费'} | project=${project_name || contract_address}`);
       } catch (payErr) {
         console.warn('[对话] 付费状态查询失败，降级为免费模式:', payErr.message);
+      }
+    }
+    // 🆕 兜底：前端传了 report_data 且有有效内容 → 用户确实有报告 → 算已付费
+    if (!isPaid && inlineReportData) {
+      const hasRealData = !!(inlineReportData.static_engine?.products?.length || inlineReportData.dynamic_engine?.income_rules?.length || inlineReportData.six_dimensions?.length)
+      if (hasRealData) {
+        isPaid = true
+        paidSource = 'inlineReportData(DB存储可能失败)'
+        console.log('[对话] 通过 inlineReportData 确认付费')
       }
     }
     console.log(`[对话] 最终付费状态: ${isPaid ? '已付费' : '免费'} | 来源=${paidSource} | project=${project_name || contract_address}`);
