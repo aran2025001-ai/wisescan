@@ -2081,7 +2081,7 @@ async function handleGenerateReport(req, res) {
   }
   // 防刷计时器移到非缓存路径（仅未缓存项目才设置，避免缓存命中仍被拦截）
 
-  const projectName = project_name.trim();
+  const projectName = (project_name || '').trim();
   const address = contract_address?.trim() || '未提供';
   let detectedChain = 'unknown';
 
