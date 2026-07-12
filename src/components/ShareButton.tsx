@@ -238,6 +238,24 @@ export default function ShareButton({ inviteCode, label, className = '', trigger
     }
   }, [shareText, doCopy, doShare])
 
+  /** 保存图片到设备 */
+  const handleSaveImage = useCallback(async () => {
+    const src = thumbnailSrc || '/share-poster.png'
+    try {
+      const bgResp = await fetch(src)
+      const bgBlob = await bgResp.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(bgBlob)
+      a.download = `明鉴-邀请卡片-${inviteCode || 'share'}.png`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      setToast('✅ 图片已保存')
+    } catch {
+      // 降级：新窗口打开，用户长按保存
+      window.open(src, '_blank')
+      setToast('如未自动下载，请长按图片保存')
+    }
+  }, [thumbnailSrc, inviteCode])
+
   /** 确认弹窗「确定」：关闭弹窗 + 打开对应 APP */
   const handleConfirmOk = useCallback(() => {
     const ch = confirmModal.channel
@@ -369,7 +387,23 @@ export default function ShareButton({ inviteCode, label, className = '', trigger
               ))}
             </div>
 
-            <div className="h-2"/>
+            {/* 底部操作按钮：保存图片 + 关闭 */}
+            <div className="flex gap-3 mt-4">
+              <button onClick={handleSaveImage}
+                className="flex-1 h-11 rounded-xl bg-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.97] transition-transform">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                保存图片
+              </button>
+              <button onClick={() => setShowSheet(false)}
+                className="flex-1 h-11 rounded-xl border border-gray-300 text-gray-600 text-sm font-medium flex items-center justify-center gap-2 active:scale-[0.97] transition-transform">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+                关闭
+              </button>
+            </div>
           </div>
         </div>,
         document.body
