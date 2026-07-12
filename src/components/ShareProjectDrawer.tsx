@@ -148,9 +148,12 @@ export default function ShareProjectDrawer({
 
   // ── 基础 URL ──
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://wisescan.xyz'
-  // 二维码内容：带邀请码的欢迎页（分享者获得邀请收益）
-  const qrContentUrl = inviteCode ? `${baseUrl}/invite?code=${inviteCode}` : baseUrl
-  // 优先使用短链接，回退到长链接（给用户去分享的链接）
+  // 二维码内容：优先指向项目详情页（带邀请码）
+  const qrContentUrl = projectId && inviteCode ? `${baseUrl}/library/${projectId}?code=${inviteCode}`
+    : projectId ? `${baseUrl}/library/${projectId}`
+    : inviteCode ? `${baseUrl}/invite?code=${inviteCode}`
+    : baseUrl
+  // 分享链接：优先指向项目详情页，有短码时用短码兜底
   const posterParams = new URLSearchParams({
     type: 'project',
     name: projectName,
@@ -164,7 +167,10 @@ export default function ShareProjectDrawer({
     qr: inviteCode ? `${baseUrl}/library?address=${contractAddress}&code=${inviteCode}` : `${baseUrl}/library?address=${contractAddress}`,
   })
   const longUrl = `${baseUrl}/share/poster?${posterParams.toString()}`
-  const shareUrl = shortCode ? `${baseUrl}/s/${shortCode}` : longUrl
+  // 分享链接：有 projectId 时直接跳到项目详情页（用户最需要），否则用短链接/海报链接
+  const shareUrl = projectId ? `${baseUrl}/library/${projectId}`
+    : shortCode ? `${baseUrl}/s/${shortCode}`
+    : longUrl
 
   // ── 生成海报 PNG 图片 + 短链接（预览打开时异步创建）──
   useEffect(() => {
@@ -523,18 +529,29 @@ export default function ShareProjectDrawer({
         document.body
       )}
 
-      {/* 长按保存预览 */}
+      {/* 保存图片预览：下载按钮 + 长按保存提示 */}
       {savePreviewSrc && createPortal(
         <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/90" onClick={() => setSavePreviewSrc('')}>
-          <div className="relative max-w-[80vw] max-h-[85vh] flex flex-col items-center gap-3" onClick={e => e.stopPropagation()}>
-            <img src={savePreviewSrc} alt="海报" className="max-w-full max-h-[75vh] rounded-2xl shadow-2xl" />
-            <div className="text-white/70 text-sm text-center">
-              👆 长按图片，选择「保存到相册」
+          <div className="relative max-w-[80vw] max-h-[85vh] flex flex-col items-center gap-4" onClick={e => e.stopPropagation()}>
+            <img src={savePreviewSrc} alt="海报" className="max-w-full max-h-[65vh] rounded-2xl shadow-2xl" />
+            <div className="flex gap-3 w-full justify-center">
+              {/* 下载按钮：直接使用图片URL */}
+              <a href={savePreviewSrc} download={`明鉴-${projectName || '项目'}-情报卡片.png`}
+                className="flex-1 max-w-[160px] h-11 rounded-xl bg-blue-500 text-white text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.97] transition-transform">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                保存图片
+              </a>
+              <button onClick={() => setSavePreviewSrc('')}
+                className="flex-1 max-w-[120px] h-11 rounded-xl border border-white/20 text-white/80 text-sm font-medium flex items-center justify-center gap-2 active:scale-[0.97] transition-transform">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+                关闭
+              </button>
             </div>
-            <button onClick={() => setSavePreviewSrc('')}
-              className="mt-1 px-6 py-2 rounded-full bg-white/10 text-white text-sm active:bg-white/20 transition-colors">
-              关闭
-            </button>
+            <div className="text-white/50 text-xs text-center -mt-2">或长按图片保存到相册</div>
           </div>
         </div>,
         document.body

@@ -79,6 +79,7 @@ function generateShortReview(reportData: any): string {
 interface ProjectInfoCardProps {
   projectName: string
   contractAddress: string
+  projectId?: string  // Supabase UUID，用于分享到项目详情页
   onCopyAddress?: () => void
   onChainData?: {
     tokenName: string
@@ -132,6 +133,7 @@ export default function ProjectInfoCard({
   onEvidenceChange,
   evidenceImages = [],
   evidenceText = '',
+  projectId,
   contributorAddress = '0xanonymous',
 }: ProjectInfoCardProps) {
   const [copied, setCopied] = useState(false)
@@ -486,6 +488,7 @@ export default function ProjectInfoCard({
             completenessLevel={displayLabel}
             review={shortReview}
             inviteCode={localInviteCode}
+            projectId={projectId}
             className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-sm font-medium py-2.5 rounded-full transition-colors"
           />
           {/* 解锁支付确认弹窗 */}

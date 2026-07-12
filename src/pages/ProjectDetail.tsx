@@ -301,6 +301,7 @@ export default function ProjectDetail() {
           <ProjectInfoCard
             projectName={projectName}
             contractAddress={contractAddress}
+            projectId={id}
             onCopyAddress={handleCopyAddress}
             onUnlock={handleUnlockReport}
             onAnalyzeBusinessModel={handleAnalyzeBusinessModel}
