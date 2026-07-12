@@ -3,8 +3,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://api.wisescan.xyz/api/$1" },
-    { "source": "/s/(.*)", "destination": "https://api.wisescan.xyz/api/s/$1" },
+    { "source": "/api/(.*)", "destination": "https://api.wisescan.xyz:3002/api/$1" },
+    { "source": "/s/(.*)", "destination": "https://api.wisescan.xyz:3002/api/s/$1" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
