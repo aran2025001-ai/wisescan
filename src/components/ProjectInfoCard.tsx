@@ -256,7 +256,8 @@ export default function ProjectInfoCard({
     fetch(`/api/get-invite-code?address=${address}`)
       .then(r => r.json())
       .then(data => {
-        if (data.code) setLocalInviteCode(data.code)
+        if (data.invite_code) setLocalInviteCode(data.invite_code)
+        else if (data.code) setLocalInviteCode(data.code)
       })
       .catch(() => {})
   }, [address])
