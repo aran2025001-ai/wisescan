@@ -697,7 +697,6 @@ export function BusinessReportCard({
               {renderEvidenceTaggedText(reportData.strategy_suggestion, "text-sm text-zinc-50 leading-relaxed whitespace-pre-wrap")}
             </div>
             {(() => {
-              // 判断点位图是否值得显示：节点总数 >= 3 且至少有 1 层 children
               const tree = reportData.visualization_tree
               const isUsable = Array.isArray(tree) && tree.length > 0
               const countNodes = (nodes: any[]): number => {
@@ -712,20 +711,20 @@ export function BusinessReportCard({
               const showTree = isUsable && totalNodes >= 3
               if (!showTree) return null
               return (
-              <div className="bg-zinc-800/60 rounded-lg p-3 border border-zinc-700/50 mt-2">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Users className="w-3.5 h-3.5 text-blue-400" />
-                  <span className="text-sm text-zinc-400">点位布局图</span>
+                <div className="bg-zinc-800/60 rounded-lg p-3 border border-zinc-700/50 mt-2">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Users className="w-3.5 h-3.5 text-blue-400" />
+                    <span className="text-sm text-zinc-400">点位布局图</span>
+                  </div>
+                  <ReactECharts
+                    option={buildTreeOption(tree)}
+                    style={{ height: 360, width: '100%' }}
+                    showLoading={false}
+                  />
                 </div>
-                <ReactECharts
-                  option={buildTreeOption(tree)}
-                  style={{ height: 360, width: '100%' }}
-                  showLoading={false}
-                />
-              </div>
               )
             })()}
-            ) : reportData.visualization_hint ? (
+            {reportData.visualization_hint ? (
               <div className="bg-zinc-800 rounded p-2.5 text-sm text-zinc-50 font-mono space-y-1 whitespace-pre-wrap">
                 {renderEvidenceTaggedText(reportData.visualization_hint, "text-sm text-zinc-50 font-mono whitespace-pre-wrap")}
               </div>
