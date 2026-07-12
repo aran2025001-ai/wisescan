@@ -485,6 +485,7 @@ export default function ProjectInfoCard({
             infoCompleteness={displayScore}
             completenessLevel={displayLabel}
             review={shortReview}
+            inviteCode={localInviteCode}
             className="w-full flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 hover:text-blue-300 text-white text-sm font-medium py-2.5 rounded-full transition-colors"
           />
           {/* 解锁支付确认弹窗 */}
