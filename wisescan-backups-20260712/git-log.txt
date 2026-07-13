@@ -1,0 +1,5 @@
+6f50911 fix: favicon顺序调整大图标在前
+21d6c40 fix: visualization_tree示例恢复为多层树结构
+98c261f fix: visualization_tree prompt示例改为一推五
+5ca9c4d fix: 保存图片提示改为请截图保存
+2b24246 fix: BusinessBreakdown缺useCallback导入

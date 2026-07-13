@@ -72,22 +72,21 @@ export default function ProjectDetail() {
           if (pf?.cached_report) setReportData(pf.cached_report)
         }
 
-        // 查当前用户是否付费解锁（有 risk_reports 记录）
-        // 无条件查询：按 project_id 查，钱包地址作为辅助条件
-        let repQuery = supabase
-          .from('risk_reports')
-          .select('report_data, user_address')
-          .eq('project_id', id)
+        // 查当前用户是否付费解锁（按 project_id + user_address 双重匹配）
+        // ⚠️ 未连钱包（address 为空）→ 绝对不返回付费状态
         if (address) {
-          repQuery = repQuery.ilike('user_address', address.toLowerCase())
-        }
-        const { data: rep } = await repQuery
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-        if (rep) {
-          setReportData(rep.report_data)
-          setIsPaid(true)
+          const { data: rep } = await supabase
+            .from('risk_reports')
+            .select('report_data, user_address')
+            .eq('project_id', id)
+            .ilike('user_address', address.toLowerCase())
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (rep) {
+            setReportData(rep.report_data)
+            setIsPaid(true)
+          }
         }
       } catch (e: any) {
         if (!cancelled) setError(e.message)
