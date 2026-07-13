@@ -814,6 +814,10 @@ export default function RiskAssessment() {
           is_paid: chatIsPaid,
           report_data: reportData || preloadedReportData || undefined,
           page: 'risk',
+          user_notes: formData.remarks?.trim() || undefined,
+          website: formData.website?.trim() || undefined,
+          community: formData.community?.trim() || undefined,
+          whitepaper: formData.whitepaper?.trim() || undefined,
         }),
       });
 
@@ -1073,6 +1077,9 @@ export default function RiskAssessment() {
       ...base,
       user_notes: formData.remarks?.trim() || undefined,
       user_notes_images: userNotesImages.length > 0 ? userNotesImages : undefined,
+      website: formData.website?.trim() || undefined,
+      community: formData.community?.trim() || undefined,
+      whitepaper: formData.whitepaper?.trim() || undefined,
     })
 
     // 🔗 同步到 Supabase（并行执行，不阻塞）
@@ -1670,6 +1677,9 @@ export default function RiskAssessment() {
         project_name: projectName || scanAddr?.slice(2, 10) || 'unknown',
         contract_address: scanAddr || undefined,
         user_notes: formData.remarks?.trim() || undefined,
+        website: formData.website?.trim() || undefined,
+        community: formData.community?.trim() || undefined,
+        whitepaper: formData.whitepaper?.trim() || undefined,
         user_address: address || 'anonymous',
       }
       const fullRes = await fetch('/api/generate-risk-report', {
