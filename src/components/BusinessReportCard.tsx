@@ -97,6 +97,10 @@ interface BusinessReportCardProps {
 
 /** ECharts Tree 选项构建 */
 function buildTreeOption(treeData: TreeNode) {
+  // 兼容数组格式（API 返回 [{...}]，取第一项）
+  const root = Array.isArray(treeData) ? treeData[0] : treeData
+  if (!root) return { series: [] }
+
   // 递归设置节点颜色
   function colorNodes(node: TreeNode) {
     const name = node?.name || ''
@@ -110,7 +114,7 @@ function buildTreeOption(treeData: TreeNode) {
     }
     node.children?.forEach(colorNodes)
   }
-  const cloned = JSON.parse(JSON.stringify(treeData))
+  const cloned = JSON.parse(JSON.stringify(root))
   colorNodes(cloned)
 
   return {
@@ -727,7 +731,7 @@ export function BusinessReportCard({
                     <span className="text-sm text-zinc-400">点位布局图</span>
                   </div>
                   <ReactECharts
-                    option={buildTreeOption(tree)}
+                    option={buildTreeOption(Array.isArray(tree) ? tree[0] : tree)}
                     style={{ height: 360, width: '100%' }}
                     showLoading={false}
                   />
