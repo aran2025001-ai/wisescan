@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import AdminLayout from './AdminLayout'
+import { useNavigate } from 'react-router-dom'
 
 interface WhitelistEntry {
   address: string
@@ -108,8 +110,9 @@ export default function AdminWhitelist() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto mt-8 p-4">
-      <h2 className="text-lg font-semibold text-white mb-4">白名单管理</h2>
+    <AdminLayout>
+      <div className="max-w-3xl">
+        <h2 className="text-lg font-semibold text-white mb-4">白名单管理</h2>
 
       {msg && <p className="text-sm text-zinc-300 mb-3 bg-zinc-700 p-2 rounded">{msg}</p>}
 
@@ -151,5 +154,6 @@ export default function AdminWhitelist() {
       </div>
       <p className="text-xs text-zinc-500 mt-4">白名单用户支付时展示完整付费流程，实际不扣费。</p>
     </div>
+    </AdminLayout>
   )
 }
