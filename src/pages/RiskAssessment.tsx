@@ -2198,7 +2198,7 @@ export default function RiskAssessment() {
               onPointerUp={() => {
                 if (asrClientRef.current) { asrClientRef.current.stopRecording(); asrClientRef.current = null }
               }}
-              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all text-sm ${
+              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all text-sm select-none ${
                 isRecording ? "bg-blue-500 text-white" : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
               }`}
             >
