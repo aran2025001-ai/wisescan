@@ -9,12 +9,7 @@ export default function AdminSiteConfig() {
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
-    const token = localStorage.getItem('admin_token')
-    if (!token) { navigate('/admin/login'); return }
-
-    fetch('/api/admin/config?key=display_user_count', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    fetch('/api/site-config?key=display_user_count')
       .then(r => r.json())
       .then(data => {
         if (data.success && data.data?.display_user_count) {
@@ -22,22 +17,22 @@ export default function AdminSiteConfig() {
         }
       })
       .catch(() => {})
-  }, [navigate])
+  }, [])
 
   const handleSave = async () => {
-    const token = localStorage.getItem('admin_token')
-    if (!token) return
     setSaving(true)
     setMsg('')
     try {
-      const res = await fetch('/api/admin/config/set', {
+      const pw = prompt('请输入管理员密码：')
+      if (!pw) { setSaving(false); return }
+      const res = await fetch('/api/site-config', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ key: 'display_user_count', value: displayCount }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'display_user_count', value: displayCount, password: pw }),
       })
       const data = await res.json()
       if (data.success) {
-        setMsg('✅ 保存成功，前端页面将在刷新后生效')
+        setMsg('✅ 保存成功，刷新前端页面后生效')
       } else {
         setMsg('❌ 保存失败: ' + (data.error || '未知错误'))
       }

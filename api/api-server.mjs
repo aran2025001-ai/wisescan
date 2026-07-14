@@ -5959,12 +5959,27 @@ async function handleFeedbackSubmit(req, res) {
 // ===== 站点配置公共读取（前端页面用） =====
 async function handleSiteConfig(req, res) {
   try {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const key = url.searchParams.get('key');
-    const { readFileSync } = await import('node:fs');
+    const { readFileSync, writeFileSync } = await import('node:fs');
     const { join, dirname } = await import('node:path');
     const { fileURLToPath } = await import('node:url');
     const configPath = join(dirname(fileURLToPath(import.meta.url)), 'config', 'site-config.json');
+
+    // POST：修改配置（需管理员密码）
+    if (req.method === 'POST') {
+      const body = await readBody(req);
+      const pw = body?.password || '';
+      const ADMIN_PW = process.env.VITE_ADMIN_PASSWORD || 'Aran28593117';
+      if (pw !== ADMIN_PW) return jsonRes(res, 403, { error: '密码错误' });
+      let config = {};
+      try { config = JSON.parse(readFileSync(configPath, 'utf-8')); } catch {}
+      if (body.key) config[body.key] = body.value;
+      writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+      return jsonRes(res, 200, { success: true });
+    }
+
+    // GET：读取配置
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const key = url.searchParams.get('key');
     let config = {};
     try { config = JSON.parse(readFileSync(configPath, 'utf-8')); } catch {}
     if (key) {

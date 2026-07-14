@@ -502,7 +502,6 @@ export default function ProjectDetail() {
           userAddress={address || ''}
           projectId={id || undefined}
           priceType={paymentPrice < 2.99 ? 'update' : 'standard'}
-          isWhitelisted={isWhitelisted}
         />
       )}
     </div>

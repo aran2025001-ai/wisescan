@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { encodeFunctionData, parseUnits } from 'viem'
 import { createPortal } from 'react-dom'
 
@@ -14,7 +14,6 @@ interface PaymentModalProps {
   couponId?: string
   priceType?: 'standard' | 'update'  // standard=首次, update=更新报告
   onPaymentSuccess: () => void
-  isWhitelisted?: boolean  // 白名单用户：模拟支付流程，实际不扣费
 }
 
 type PaymentStatus =
@@ -57,13 +56,22 @@ export default function PaymentModal({
   couponId,
   priceType,
   onPaymentSuccess,
-  isWhitelisted = false,
 }: PaymentModalProps) {
 
   const [status, setStatus] = useState<PaymentStatus>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [txHash, setTxHash] = useState('')
   const [manualTxHash, setManualTxHash] = useState('')
+  const [whitelisted, setWhitelisted] = useState(false)
+
+  // 自动检查当前地址是否在白名单中
+  useEffect(() => {
+    if (!userAddress) { setWhitelisted(false); return }
+    fetch(`/api/whitelist?action=check&address=${encodeURIComponent(userAddress)}`)
+      .then(r => r.json())
+      .then(j => { if (j.whitelisted) setWhitelisted(true) })
+      .catch(() => {})
+  }, [userAddress])
 
   const isMainnet = import.meta.env.VITE_IS_MAINNET === 'true' || false
   const targetChainName = isMainnet ? 'BSC 主网' : 'BSC 测试网'
@@ -207,7 +215,7 @@ export default function PaymentModal({
 
   const handlePay = async () => {
     // 白名单用户：模拟支付流程，不实际扣费
-    if (isWhitelisted) {
+    if (whitelisted) {
       setStatus('confirming')
       await new Promise(r => setTimeout(r, 1000))
       setStatus('broadcasting')
