@@ -123,10 +123,10 @@ function buildTreeOption(treeData: TreeNode) {
       type: 'tree',
       data: [cloned],
       orient: 'vertical' as const,
-      roam: { scale: { zoomOnMouseWheel: { sensitivity: 0.3 } }, move: true },
+      roam: true,
       initialTreeDepth: 3,
       scaleLimit: { min: 0.8, max: 2 },
-      animationDurationUpdate: 600,
+      animationDurationUpdate: 300,
       label: {
         position: 'bottom' as const,
         verticalAlign: 'middle' as const,
