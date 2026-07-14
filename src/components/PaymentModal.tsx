@@ -14,6 +14,7 @@ interface PaymentModalProps {
   couponId?: string
   priceType?: 'standard' | 'update'  // standard=首次, update=更新报告
   onPaymentSuccess: () => void
+  isWhitelisted?: boolean  // 白名单用户：模拟支付流程，实际不扣费
 }
 
 type PaymentStatus =
@@ -56,6 +57,7 @@ export default function PaymentModal({
   couponId,
   priceType,
   onPaymentSuccess,
+  isWhitelisted = false,
 }: PaymentModalProps) {
 
   const [status, setStatus] = useState<PaymentStatus>('idle')
@@ -204,6 +206,20 @@ export default function PaymentModal({
   }
 
   const handlePay = async () => {
+    // 白名单用户：模拟支付流程，不实际扣费
+    if (isWhitelisted) {
+      setStatus('confirming')
+      await new Promise(r => setTimeout(r, 1000))
+      setStatus('broadcasting')
+      await new Promise(r => setTimeout(r, 1000))
+      setStatus('pending')
+      await new Promise(r => setTimeout(r, 1000))
+      setStatus('success')
+      await new Promise(r => setTimeout(r, 800))
+      onPaymentSuccess()
+      return
+    }
+
     setStatus('confirming')
 
     // 先检查是否有钱包 provider

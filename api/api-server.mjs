@@ -6585,7 +6585,68 @@ async function handleCheckPayment(req, res) {
   }
 }
 
-// ===== Router =====
+// ===== 白名单管理 =====
+async function handleWhitelist(req, res) {
+  try {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const action = url.searchParams.get('action') || '';
+    const address = url.searchParams.get('address') || '';
+    const body = req.method === 'POST' ? await readBody(req) : {};
+
+    const { join, dirname } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const { readFileSync, writeFileSync, existsSync } = await import('node:fs');
+    const whitelistPath = join(dirname(fileURLToPath(import.meta.url)), 'config', 'whitelist.json');
+
+    // 读取白名单文件
+    let whitelist = [];
+    try {
+      if (existsSync(whitelistPath)) whitelist = JSON.parse(readFileSync(whitelistPath, 'utf-8'));
+      if (!Array.isArray(whitelist)) whitelist = [];
+    } catch {}
+
+    // 公开接口：检查地址是否在白名单
+    if (action === 'check') {
+      const addr = (address || '').toLowerCase().trim();
+      if (!addr) return jsonRes(res, 200, { whitelisted: false });
+      const entry = whitelist.find(w => w.address?.toLowerCase() === addr);
+      return jsonRes(res, 200, { whitelisted: !!entry, note: entry?.note || '' });
+    }
+
+    // 以下操作需要管理员密码
+    const pw = body.password || '';
+    const ADMIN_PW = process.env.VITE_ADMIN_PASSWORD || 'Aran28593117';
+    if (pw !== ADMIN_PW) return jsonRes(res, 403, { error: '密码错误' });
+
+    if (action === 'list') {
+      return jsonRes(res, 200, { success: true, data: whitelist });
+    }
+
+    if (action === 'add') {
+      const addr = (body.address || '').toLowerCase().trim();
+      const note = (body.note || '').trim();
+      if (!addr) return jsonRes(res, 400, { error: '地址不能为空' });
+      if (whitelist.find(w => w.address?.toLowerCase() === addr)) {
+        return jsonRes(res, 400, { error: '该地址已在白名单中' });
+      }
+      whitelist.push({ address: addr, note, addedAt: new Date().toISOString() });
+      writeFileSync(whitelistPath, JSON.stringify(whitelist, null, 2), 'utf-8');
+      return jsonRes(res, 200, { success: true });
+    }
+
+    if (action === 'remove') {
+      const addr = (body.address || '').toLowerCase().trim();
+      if (!addr) return jsonRes(res, 400, { error: '地址不能为空' });
+      whitelist = whitelist.filter(w => w.address?.toLowerCase() !== addr);
+      writeFileSync(whitelistPath, JSON.stringify(whitelist, null, 2), 'utf-8');
+      return jsonRes(res, 200, { success: true });
+    }
+
+    return jsonRes(res, 400, { error: '未知操作' });
+  } catch (err) {
+    return jsonRes(res, 500, { error: err.message });
+  }
+}
 const routes = {
   '/api/add-project':              handleAddProject,
   '/api/generate-risk-report':     handleGenerateReport,
@@ -6621,6 +6682,8 @@ const routes = {
   // 链上 USDT 支付
   '/api/verify-payment':         handleVerifyPayment,
   '/api/check-payment':          handleCheckPayment,
+  // 白名单
+  '/api/whitelist':              handleWhitelist,
 };
 
 // 前缀匹配路由表（用于 /api/evidence/list?foo=bar 场景）

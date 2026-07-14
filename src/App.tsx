@@ -38,6 +38,7 @@ const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'))
 const AdminUserDetail = lazy(() => import('./pages/admin/AdminUserDetail'))
 const AdminFeedback = lazy(() => import('./pages/admin/AdminFeedback'))
 const AdminSiteConfig = lazy(() => import('./pages/admin/AdminSiteConfig'))
+const AdminWhitelist = lazy(() => import('./pages/admin/AdminWhitelist'))
 
 function LazyFallback() {
   return (
@@ -135,6 +136,7 @@ export default function App() {
                 <Route path="/admin/users/:address" element={<AdminUserDetail />} />
                 <Route path="/admin/feedback" element={<AdminFeedback />} />
                 <Route path="/admin/site-config" element={<AdminSiteConfig />} />
+                <Route path="/admin/whitelist" element={<AdminWhitelist />} />
                 <Route path="/admin" element={<AdminLogin />} />
               </Routes>
             </Suspense>

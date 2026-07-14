@@ -36,6 +36,7 @@ export default function ProjectDetail() {
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [paymentPrice, setPaymentPrice] = useState(2.99) // 2.99=首次解锁, 1.0=更新报告
+  const [isWhitelisted, setIsWhitelisted] = useState(false) // 白名单用户
   const [, ] = useState(false)
   const [, setInviteCount] = useState(0)  // 已成功邀请人数
   const [isUpdateRiskModalOpen, setIsUpdateRiskModalOpen] = useState(false)
@@ -129,6 +130,15 @@ export default function ProjectDetail() {
     setShowPaymentModal(false)
     handleGenerateRiskReport()
   }
+
+  // 检查当前钱包地址是否在白名单中
+  useEffect(() => {
+    if (!address) { setIsWhitelisted(false); return }
+    fetch(`/api/whitelist?action=check&address=${encodeURIComponent(address)}`)
+      .then(r => r.json())
+      .then(j => { if (j.whitelisted) setIsWhitelisted(true) })
+      .catch(() => {})
+  }, [address])
 
   const handleAnalyzeBusinessModel = () => setIsAnalyzeModalOpen(true)
   const handleUpdateRiskReport = () => {
@@ -492,6 +502,7 @@ export default function ProjectDetail() {
           userAddress={address || ''}
           projectId={id || undefined}
           priceType={paymentPrice < 2.99 ? 'update' : 'standard'}
+          isWhitelisted={isWhitelisted}
         />
       )}
     </div>
