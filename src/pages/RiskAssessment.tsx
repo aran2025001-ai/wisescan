@@ -1393,15 +1393,23 @@ export default function RiskAssessment() {
       setContractValidation({ status: 'unchecked', message: '' })
       return
     }
-    if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) {
-      setContractValidation({ status: 'format_invalid', message: '地址格式错误：必须是 0x 开头 + 40位十六进制字符' })
+    // 判断地址类型（匹配后端 detectChain 逻辑）
+    const isEvm = /^0x[0-9a-fA-F]{40}$/.test(addr)
+    const isTron = /^T[A-Za-z1-9]{33}$/.test(addr)
+    const isSolana = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)
+    if (!isEvm && !isTron && !isSolana) {
+      setContractValidation({ status: 'format_invalid', message: '地址格式错误：支持 EVM(0x开头)、TRON(T开头)、Solana' })
       return
     }
-    const hasMixedCase = addr !== addr.toLowerCase() && addr !== addr.toUpperCase()
-    if (hasMixedCase) {
-      setContractValidation({ status: 'eip55_ok', message: '✅ 格式正确，EIP-55 校验和通过' })
+    if (isEvm) {
+      const hasMixedCase = addr !== addr.toLowerCase() && addr !== addr.toUpperCase()
+      if (hasMixedCase) {
+        setContractValidation({ status: 'eip55_ok', message: '✅ 格式正确，EIP-55 校验和通过' })
+      } else {
+        setContractValidation({ status: 'eip55_fail', message: '⚠️ 格式有效但未通过 EIP-55 校验和，请仔细核对每一位' })
+      }
     } else {
-      setContractValidation({ status: 'eip55_fail', message: '⚠️ 格式有效但未通过 EIP-55 校验和，请仔细核对每一位' })
+      setContractValidation({ status: 'format_ok', message: '✅ 格式正确' })
     }
   }, [formData.contractAddress])
 
@@ -1475,11 +1483,16 @@ export default function RiskAssessment() {
     const scanAddr = autoResolvedAddr || formData.contractAddress.trim()
     if (!noContractMode && scanAddr) {
       const addr = scanAddr
-      if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) {
+      const isEvm = /^0x[0-9a-fA-F]{40}$/.test(addr)
+      const isTron = /^T[A-Za-z1-9]{33}$/.test(addr)
+      const isSolana = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)
+      if (!isEvm && !isTron && !isSolana) {
         setAlertMsg(
           '合约地址格式错误！\n\n' +
-          '正确格式：0x 开头 + 40位十六进制字符（0-9, a-f, A-F）\n' +
-          '示例：0x742d35Cc6634C0532925a3b844Bc454e4438f44e\n\n' +
+          '支持以下地址格式：\n' +
+          '• EVM 链：0x 开头 + 40位十六进制字符\n' +
+          '• TRON：T 字母开头 + 33 位字符\n' +
+          '• Solana：base58 编码，32-44 位字符\n\n' +
           '请检查后重新输入。'
         )
         setShowAlertModal(true)
