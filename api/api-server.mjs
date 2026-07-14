@@ -6662,6 +6662,125 @@ async function handleWhitelist(req, res) {
     return jsonRes(res, 500, { error: err.message });
   }
 }
+
+// ===== 推广统计分析 =====
+async function handlePromotion(req, res) {
+  try {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const action = url.searchParams.get('action') || '';
+    const body = req.method === 'POST' ? await readBody(req) : {};
+    const supabase = await getSupabaseAdmin();
+
+    // 增删操作需管理员密码
+    const pw = body.password || '';
+    const ADMIN_PW = process.env.VITE_ADMIN_PASSWORD || 'Aran28593117';
+
+    if (action === 'add') {
+      if (pw !== ADMIN_PW) return jsonRes(res, 403, { error: '密码错误' });
+      const address = (body.address || '').toLowerCase().trim();
+      const name = (body.name || '').trim();
+      const note = (body.note || '').trim();
+      if (!address) return jsonRes(res, 400, { error: '地址不能为空' });
+      // 查该地址的 invite_code
+      const { data: inv } = await supabase.from('invitations').select('invite_code').eq('inviter', address).maybeSingle();
+      const invite_code = inv?.invite_code || null;
+      const { error: insErr } = await supabase.from('promotion_cooperators').insert({
+        address, name, note, invite_code,
+        active: true,
+      });
+      if (insErr) return jsonRes(res, 400, { error: insErr.message });
+      return jsonRes(res, 200, { success: true });
+    }
+
+    if (action === 'remove') {
+      if (pw !== ADMIN_PW) return jsonRes(res, 403, { error: '密码错误' });
+      const address = (body.address || '').toLowerCase().trim();
+      if (!address) return jsonRes(res, 400, { error: '地址不能为空' });
+      await supabase.from('promotion_cooperators').delete().eq('address', address);
+      return jsonRes(res, 200, { success: true });
+    }
+
+    if (action === 'list') {
+      if (pw !== ADMIN_PW) return jsonRes(res, 403, { error: '密码错误' });
+      const { data } = await supabase.from('promotion_cooperators').select('*').order('created_at', { ascending: false });
+      return jsonRes(res, 200, { success: true, data: data || [] });
+    }
+
+    // 统计数据（管理员密码保护）
+    if (action === 'stats' || action === 'all-stats') {
+      if (pw !== ADMIN_PW) return jsonRes(res, 403, { error: '密码错误' });
+
+      let targets = [];
+
+      if (action === 'stats') {
+        const addr = url.searchParams.get('address') || '';
+        if (!addr) return jsonRes(res, 400, { error: 'address required' });
+        targets = [{ address: addr.toLowerCase(), name: '', invite_code: null }];
+      } else {
+        const { data: all } = await supabase.from('promotion_cooperators').select('*');
+        targets = (all || []).map((c: any) => ({ address: c.address, name: c.name, invite_code: c.invite_code }));
+      }
+
+      // 并行统计
+      const stats = await Promise.all(targets.map(async (t) => {
+        const addr = t.address;
+
+        // 查该地址的 invite_code
+        let code = t.invite_code;
+        if (!code) {
+          const { data: inv } = await supabase.from('invitations').select('invite_code').eq('inviter', addr).maybeSingle();
+          code = inv?.invite_code || null;
+        }
+
+        // 查所有被邀请人（已连接的用户）
+        const { data: invitees } = await supabase
+          .from('invitations')
+          .select('invitee')
+          .eq('inviter', addr)
+          .neq('invitee', '')
+          .not('invitee', 'like', 'pending_%');
+
+        const invitedAddresses: string[] = (invitees || []).map((i: any) => i.invitee).filter(Boolean);
+        const registeredCount = invitedAddresses.length;
+
+        // 查这些被邀请人中有多少已付费
+        let paidCount = 0;
+        if (registeredCount > 0) {
+          // 分批查（Supabase IN 限制 100 个）
+          const batchSize = 50;
+          for (let i = 0; i < registeredCount; i += batchSize) {
+            const batch = invitedAddresses.slice(i, i + batchSize);
+            const { data: paid } = await supabase
+              .from('risk_reports')
+              .select('user_address')
+              .in('user_address', batch);
+            if (paid) paidCount += paid.length;
+          }
+        }
+
+        const paidAmount = paidCount * 2.99;  // 标准价 2.99 USDT
+        const rate = registeredCount > 0 ? ((paidCount / registeredCount) * 100).toFixed(1) + '%' : '0%';
+
+        return {
+          address: addr,
+          name: t.name,
+          invite_code: code,
+          registered_count: registeredCount,
+          paid_count: paidCount,
+          paid_amount: paidAmount,
+          pay_rate: rate,
+        };
+      }));
+
+      return jsonRes(res, 200, { success: true, data: stats });
+    }
+
+    return jsonRes(res, 400, { error: '未知操作' });
+  } catch (err) {
+    return jsonRes(res, 500, { error: err.message });
+  }
+}
+
 const routes = {
   '/api/add-project':              handleAddProject,
   '/api/generate-risk-report':     handleGenerateReport,
@@ -6699,6 +6818,8 @@ const routes = {
   '/api/check-payment':          handleCheckPayment,
   // 白名单
   '/api/whitelist':              handleWhitelist,
+  // 推广统计
+  '/api/promotion':              handlePromotion,
 };
 
 // 前缀匹配路由表（用于 /api/evidence/list?foo=bar 场景）

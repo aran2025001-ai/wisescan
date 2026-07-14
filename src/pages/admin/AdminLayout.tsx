@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
-import { LayoutDashboard, Wallet, FileSearch, FolderKanban, Users, MessageSquareText, Settings, ShieldCheck, LogOut } from 'lucide-react'
+import { LayoutDashboard, Wallet, FileSearch, FolderKanban, Users, MessageSquareText, Settings, ShieldCheck, BarChart3, LogOut } from 'lucide-react'
 
 const navItems = [
   { path: '/admin/dashboard', label: '仪表盘', icon: LayoutDashboard },
@@ -11,6 +11,7 @@ const navItems = [
   { path: '/admin/feedback', label: '反馈管理', icon: MessageSquareText },
   { path: '/admin/site-config', label: '站点配置', icon: Settings },
   { path: '/admin/whitelist', label: '白名单', icon: ShieldCheck },
+  { path: '/admin/promotions', label: '推广统计', icon: BarChart3 },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
