@@ -6718,7 +6718,7 @@ async function handlePromotion(req, res) {
         targets = [{ address: addr.toLowerCase(), name: '', invite_code: null }];
       } else {
         const { data: all } = await supabase.from('promotion_cooperators').select('*');
-        targets = (all || []).map((c: any) => ({ address: c.address, name: c.name, invite_code: c.invite_code }));
+        targets = (all || []).map(c => ({ address: c.address, name: c.name, invite_code: c.invite_code }));
       }
 
       // 并行统计
@@ -6740,7 +6740,7 @@ async function handlePromotion(req, res) {
           .neq('invitee', '')
           .not('invitee', 'like', 'pending_%');
 
-        const invitedAddresses: string[] = (invitees || []).map((i: any) => i.invitee).filter(Boolean);
+        const invitedAddresses = (invitees || []).map(i => i.invitee).filter(Boolean);
         const registeredCount = invitedAddresses.length;
 
         // 查这些被邀请人中有多少已付费
