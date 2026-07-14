@@ -23,8 +23,13 @@ export default function AdminSiteConfig() {
     setSaving(true)
     setMsg('')
     try {
-      const pw = prompt('请输入管理员密码：')
-      if (!pw) { setSaving(false); return }
+      // 从 sessionStorage 取密码（首次取完后缓存），第二次直接用
+      let pw = sessionStorage.getItem('wisescan_admin_pw')
+      if (!pw) {
+        pw = prompt('请输入管理员密码：')
+        if (!pw) { setSaving(false); return }
+        sessionStorage.setItem('wisescan_admin_pw', pw)
+      }
       const res = await fetch('/api/site-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -34,6 +39,8 @@ export default function AdminSiteConfig() {
       if (data.success) {
         setMsg('✅ 保存成功，刷新前端页面后生效')
       } else {
+        // 密码被改了 → 清空缓存再试一次
+        sessionStorage.removeItem('wisescan_admin_pw')
         setMsg('❌ 保存失败: ' + (data.error || '未知错误'))
       }
     } catch {

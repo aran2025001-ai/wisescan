@@ -36,7 +36,7 @@ export default function AdminWhitelist() {
         body: JSON.stringify({ password: p }),
       })
       const j = await r.json()
-      if (!j.success) { setError(j.error || '密码错误'); setLoading(false); return }
+      if (!j.success) { setError(j.error || '密码错误'); sessionStorage.removeItem('wisescan_admin_pw'); setLoading(false); return }
       setAuthed(true)
       setEntries(j.data || [])
       sessionStorage.setItem('wisescan_admin_pw', p)
@@ -92,7 +92,7 @@ export default function AdminWhitelist() {
   if (!authed) {
     return (
       <div className="max-w-md mx-auto mt-20 p-6 bg-zinc-800 rounded-lg border border-zinc-700">
-        <h2 className="text-lg font-semibold text-white mb-4">白名单管理 - 登录</h2>
+        <h2 className="text-lg font-semibold text-white mb-4">白名单管理</h2>
         <input
           type="password"
           placeholder="管理员密码"
@@ -102,9 +102,11 @@ export default function AdminWhitelist() {
           onKeyDown={e => e.key === 'Enter' && login()}
         />
         {error && <p className="text-red-400 text-sm mb-2">{error}</p>}
-        <button onClick={() => login()} className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-          登录
+        <button onClick={() => login()} disabled={loading}
+          className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 mb-3">
+          {loading ? '验证中...' : '登录'}
         </button>
+        <a href="/admin/dashboard" className="block text-center text-sm text-zinc-400 hover:text-zinc-200">← 回到仪表盘</a>
       </div>
     )
   }
