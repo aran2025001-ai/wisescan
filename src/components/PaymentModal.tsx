@@ -223,8 +223,9 @@ export default function PaymentModal({
       setStatus('pending')
       await new Promise(r => setTimeout(r, 1000))
       setStatus('success')
-      await new Promise(r => setTimeout(r, 800))
+      await new Promise(r => setTimeout(r, 1500))
       onPaymentSuccess()
+      onClose()
       return
     }
 
