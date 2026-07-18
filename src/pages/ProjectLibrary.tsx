@@ -72,8 +72,8 @@ export default function ProjectLibrary() {
       console.time('⏱️ fetchProjects 总耗时')
       try {
         console.time('⏱️ supabase 并行查询')
-        // 并行查询：项目列表 + 风险报告（加上 limit 防止全量扫表）
-        const [projResult, reportResult] = await Promise.all([
+        // 并行查询：项目列表 + 风险报告 + 项目事实表（cached_report）
+        const [projResult, reportResult, factsResult] = await Promise.all([
           supabase
             .from('projects')
             .select('id, name, contract_address, assessment_count, last_eval_time, created_at, previous_names')
@@ -84,6 +84,11 @@ export default function ProjectLibrary() {
             .select('project_id, total_score')
             .order('created_at', { ascending: false })
             .limit(500),
+          supabase
+            .from('project_facts')
+            .select('contract_address, cached_report')
+            .not('cached_report', 'is', null)
+            .limit(200),
         ])
         console.timeEnd('⏱️ supabase 并行查询')
 
@@ -91,15 +96,38 @@ export default function ProjectLibrary() {
         if (projResult.error) {
           setFetchError(projResult.error.message)
         } else {
-          // 构建 riskMap（取每个 project_id 的最新一条）
+          // 风险等级字符串→数字 映射（与 ProjectDetail 完全一致）
+          const RISK_LEVEL_MAP: Record<string, number> = {
+            '良好': 1, '低风险': 1,
+            '中等': 2, '中等风险': 2,
+            '需谨慎': 3, '高风险': 4, '极高风险': 5,
+          }
+
+          // 优先用 project_facts.cached_report.risk_level（跟详情页一致）
           let riskMap: Record<string, number> = {}
+          const facts = factsResult.data || []
+          for (const f of facts) {
+            const lvl = f.cached_report?.risk_level
+            if (f.contract_address && lvl && RISK_LEVEL_MAP[lvl]) {
+              const num = RISK_LEVEL_MAP[lvl]
+              // 风险等级是数字 1-5，存到 id→riskLevel 的映射（通过 contract_address 反查 id）
+              // 暂时先存到 contractAddress
+              ;(riskMap as any)['addr:' + f.contract_address.toLowerCase()] = num
+            }
+          }
+
+          // 兜底：cached_report 缺失时退回 risk_reports.total_score
           const reports = reportResult.data || []
           const seen = new Set<string>()
           for (const r of reports) {
             if (!seen.has(r.project_id)) {
               seen.add(r.project_id)
+              // 已有 cached_report 的优先
               const ts = r.total_score
-              riskMap[r.project_id] = ts >= 75 ? 1 : ts >= 55 ? 2 : ts >= 35 ? 3 : 4
+              const scoreLevel = ts >= 75 ? 1 : ts >= 55 ? 2 : ts >= 35 ? 3 : 4
+              if (!(riskMap as any)['id:' + r.project_id]) {
+                ;(riskMap as any)['id:' + r.project_id] = scoreLevel
+              }
             }
           }
           let localCounts: Record<string, number> = {}
@@ -116,7 +144,15 @@ export default function ProjectLibrary() {
           } catch {}
           const freshProjects = (projResult.data || []).map(row => {
             const rec = mapDbRow(row)
-            if (riskMap[rec.id]) rec.riskLevel = riskMap[rec.id]
+            // 优先用 cached_report 映射（addr:...）
+            if (rec.contractAddress) {
+              const fromCached = (riskMap as any)['addr:' + rec.contractAddress.toLowerCase()]
+              if (fromCached) rec.riskLevel = fromCached
+            }
+            // 兜底用 total_score 映射（id:...）
+            if ((riskMap as any)['id:' + rec.id] && !(riskMap as any)['addr:' + rec.contractAddress?.toLowerCase()]) {
+              rec.riskLevel = (riskMap as any)['id:' + rec.id]
+            }
             if (rec.contractAddress) {
               const localC = localCounts[rec.contractAddress.toLowerCase()]
               if (localC && localC > rec.assessmentCount) rec.assessmentCount = localC
@@ -195,9 +231,10 @@ export default function ProjectLibrary() {
     return result
   }, [projects, searchInput, filterRisk, sortBy, sortAsc])
 
-  // Get risk badge styling
+  // Get risk badge styling (与 ProjectDetail 完全一致)
   const getRiskBadge = (level: number) => {
     switch (level) {
+      case 5:
       case 4:
         return { label: "极高风险", color: "bg-red-700 text-white" }
       case 3:
